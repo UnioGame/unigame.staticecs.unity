@@ -16,6 +16,8 @@ namespace unigame.staticecs.unity {
         private readonly List<IStaticEcsConverter<TWorld>> _monoBuf = new();
         private readonly List<IStaticEcsConverter<TWorld>> _registered = new();
 
+        private bool _pendingDeferredCreate;
+
         public IReadOnlyList<IStaticEcsConverter<TWorld>> RuntimeConverters => _runtime;
 
         public void RegisterRuntime(IStaticEcsConverter<TWorld> converter) {
@@ -27,6 +29,32 @@ namespace unigame.staticecs.unity {
 
         public bool UnregisterRuntime(IStaticEcsConverter<TWorld> converter) {
             return converter != null && _registered.Remove(converter);
+        }
+
+        private new void Awake() {
+            if (UsageType != UsageType.OnAwake) return;
+            TryCreateOrDefer();
+        }
+
+        private new void Start() {
+            if (UsageType != UsageType.OnStart) return;
+            TryCreateOrDefer();
+        }
+
+        private void Update() {
+            if (!_pendingDeferredCreate) return;
+            if (World<TWorld>.Status != WorldStatus.Initialized) return;
+            _pendingDeferredCreate = false;
+            CreateEntity();
+        }
+
+        private void TryCreateOrDefer() {
+            if (World<TWorld>.Status == WorldStatus.Initialized) {
+                CreateEntity();
+            }
+            else {
+                _pendingDeferredCreate = true;
+            }
         }
 
         public override bool CreateEntity() {

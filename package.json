@@ -2,7 +2,7 @@
   "name": "com.unigame.staticecs.unity",
   "author": "UniGame",
   "displayName": "UniGame Static ECS Unity",
-  "description": "Unity runtime integration for UniGame Static ECS packages",
+  "description": "Unity runtime + editor integration for UniGame Static ECS packages",
   "unity": "2023.2",
   "version": "2026.0.0",
   "license": "MIT",
@@ -10,7 +10,8 @@
     "unigame",
     "ecs",
     "static-ecs",
-    "unity"
+    "unity",
+    "editor"
   ],
   "dependencies": {
     "com.unigame.staticecs": "2026.0.0",

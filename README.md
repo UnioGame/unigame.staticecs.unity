@@ -1,9 +1,13 @@
 # UniGame Static ECS Unity
 
-Unity runtime integration for `com.unigame.staticecs`.
+Unity-facing слой `com.unigame.staticecs`: bootstrap, конвертеры, инспекторы, окна и menu-команды.
 
-This package owns Unity-facing bootstrap, authoring adapters, and demo-scene runtime bridge code.
-It should reuse `com.felid-force-studios.static-ecs-unity` providers, debug view, templates, and type GUID tooling instead of duplicating them.
+С 2026.0.0 пакет содержит **обе сборки**:
+
+- `Runtime/` (asmdef `unigame.staticecs.unity`) — рантайм: bootstrap, сервис, runner, конвертерный слой, marker `Main`.
+- `Editor/` (asmdef `unigame.staticecs.editor`, Editor-only) — property drawers, инспекторы, окна и menu-tooling. Раньше жил в отдельном пакете `com.unigame.staticecs.editor`; теперь подтянут сюда же и идёт в той же версии.
+
+Базис — upstream `com.felid-force-studios.static-ecs-unity`. Этот пакет не дублирует upstream-провайдеры/debug view/шаблоны/GUID-tooling, а расширяет их.
 
 ## Converter layer
 
@@ -160,3 +164,63 @@ public struct Main : IWorldType { }
 | `TransformBindingConverter<TWorld>` | [`TransformBindingConverter`](Runtime/Conversion/Bindings/TransformBindingConverter.cs) |
 
 Multi-world проекты пользуются generic-веткой как раньше; non-generic классы — обычные `sealed`-обёртки и не ломают расширяемость.
+
+## Editor tooling
+
+Editor-сборка (`Editor/unigame.staticecs.editor.asmdef`) подгружается только в Editor и зависит от `unigame.staticecs`, `unigame.staticecs.unity`, upstream `FFS.StaticEcs.Unity.Editor` и `unigame.contextdata.runtime`.
+
+### Property drawers
+
+В `Editor/Drawers/` лежат `[CustomPropertyDrawer]` для конфигов из `Runtime/Config`:
+
+- [`StaticEcsWorldConfigDrawer`](Editor/Drawers/StaticEcsWorldConfigDrawer.cs) — `StaticEcsWorldConfig` (capacity / threading);
+- [`StaticEcsSystemsConfigDrawer`](Editor/Drawers/StaticEcsSystemsConfigDrawer.cs) — `StaticEcsSystemsConfig` (включение pipeline'ов update/fixed/late/cleanup);
+- [`StaticEcsModuleConfigDrawer`](Editor/Drawers/StaticEcsModuleConfigDrawer.cs) — компактная отрисовка элементов `List<StaticEcsModuleConfig>` в `StaticEcsServiceSource`.
+
+Эти drawer'ы автоматически применяются к полям `world`, `systems`, `modules` любого `StaticEcsServiceSource` / `StaticEcsServiceSource<TWorld>`.
+
+### Service source inspector
+
+[`StaticEcsServiceSourceInspectorBase<TWorld>`](Editor/Validation/StaticEcsServiceSourceInspectorBase.cs) — базовый inspector с проверками:
+
+- модули назначены и содержат хотя бы один enabled;
+- нет дубликатов модулей;
+- все модули совместимы с миром `TWorld` (наследуют `StaticEcsModuleConfig<TWorld>`);
+
+Чтобы привязать его к своему `ServiceSource`, объявите `[CustomEditor(typeof(MyServiceSource))]`-наследника:
+
+```csharp
+[CustomEditor(typeof(StaticEcsServiceSource))]
+public sealed class StaticEcsMainSourceInspector
+    : StaticEcsServiceSourceInspectorBase<Main> { }
+```
+
+### Static ECS View с проектными вкладками
+
+Upstream `StaticEcsView<TWorld, TEntityProvider, TEventProvider>` (FFS) — окно отладки. Расширение [`UniGameStaticEcsView<TWorld, TEntityProvider, TEventProvider>`](Editor/View/UniGameStaticEcsView.cs) добавляет туда проектные вкладки через рефлексию (private-поле `_tabs`):
+
+- [`GameModulesTab`](Editor/View/Tabs/GameModulesTab.cs) — список модулей сервиса и их состояние (enabled / зарегистрированные типы);
+- [`BootstrapReportTab`](Editor/View/Tabs/BootstrapReportTab.cs) — последний `StaticEcsStartupReport` (success/world/modules/updates);
+- [`FeatureCatalogTab<TWorld>`](Editor/View/Tabs/FeatureCatalogTab.cs) — каталог `IStaticEcsFeature<TWorld>`-реализаций, найденных через рефлексию.
+
+Если upstream поменяет имя приватного поля, окно один раз залогирует warning и просто откроется без проектных вкладок — runtime не ломается. В таком случае нужно поднять версию `unigame.staticecs.unity` под актуальный upstream.
+
+### Меню `Tools/UniGame/Static ECS`
+
+[`UniGameStaticEcsMenu`](Editor/Menu/UniGameStaticEcsMenu.cs):
+
+- `Tools/UniGame/Static ECS/Fix Broken Providers` — открывает upstream `BrokenProvidersFixerWindow` (поиск/починка `StaticEcsEntityProvider` с битыми ссылками после переименования компонентов).
+- `Tools/UniGame/Static ECS/Documentation/Open Knowledge Base` — открывает локальную knowledge-base `docs/knowledge/static-ecs/index.md`.
+
+### Зависимости
+
+- `com.unigame.staticecs` — базовый рантайм;
+- `com.unigame.staticecs.unity` (этот же пакет, Runtime asmdef);
+- `com.unigame.contextdata` — `ServiceDataSourceAsset` для `StaticEcsServiceSource`;
+- `com.unigame.unicore` — общие contracts;
+- `com.cysharp.unitask` — `StaticEcsRunner`;
+- upstream `com.felid-force-studios.static-ecs-unity` — провайдеры, окно и инструменты, которые мы расширяем.
+
+Editor-сборка ссылается дополнительно на `FFS.StaticEcs.Unity.Editor` (upstream Editor) и `unigame.contextdata.runtime`.
+
+> Раньше Editor-часть жила в отдельном пакете `com.unigame.staticecs.editor`. Если на ней висели ссылки в проектных `manifest.json` / `*.asmdef` — снимите их: всё подтянется через `com.unigame.staticecs.unity`.
