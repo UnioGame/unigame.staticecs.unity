@@ -2,8 +2,6 @@
 
 Unity-facing слой `com.unigame.staticecs`: bootstrap, конвертеры, инспекторы, окна и menu-команды.
 
-С 2026.0.0 пакет содержит **обе сборки**:
-
 - `Runtime/` (asmdef `unigame.staticecs.unity`) — рантайм: bootstrap, сервис, runner, конвертерный слой, marker `Main`.
 - `Editor/` (asmdef `unigame.staticecs.editor`, Editor-only) — property drawers, инспекторы, окна и menu-tooling. Раньше жил в отдельном пакете `com.unigame.staticecs.editor`; теперь подтянут сюда же и идёт в той же версии.
 
