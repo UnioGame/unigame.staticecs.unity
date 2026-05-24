@@ -3,6 +3,8 @@ using FFS.Libraries.StaticEcs;
 using UniGame.Core.Runtime;
 using UniGame.Runtime.DataFlow;
 using unigame.staticecs;
+using unigame.staticecs.Random;
+using unigame.staticecs.Time;
 
 namespace unigame.staticecs.unity {
     public sealed class EcsService<TWorld> : IEcsService
@@ -10,6 +12,8 @@ namespace unigame.staticecs.unity {
         private readonly LifeTime _lifeTime = new();
         private readonly StaticEcsWorldConfig _worldConfig;
         private readonly StaticEcsSystemsConfig _systemsConfig;
+        private readonly EcsTimeFeature<TWorld> _timeFeature;
+        private readonly EcsRngFeature<TWorld> _rngFeature;
         private bool _updateSystemsCreated;
         private bool _fixedSystemsCreated;
         private bool _lateSystemsCreated;
@@ -20,6 +24,8 @@ namespace unigame.staticecs.unity {
             StaticEcsSystemsConfig systemsConfig) {
             _worldConfig = worldConfig;
             _systemsConfig = systemsConfig;
+            _timeFeature = systemsConfig.disableEcsTime ? null : new EcsTimeFeature<TWorld>();
+            _rngFeature = systemsConfig.disableEcsRng ? null : new EcsRngFeature<TWorld>();
             Report = new EcsStartupReport();
             EcsServiceRegistry.Register(this);
         }
@@ -39,6 +45,9 @@ namespace unigame.staticecs.unity {
             var registrar = World<TWorld>.Types();
             var moduleCount = 0;
 
+            _timeFeature?.RegisterTypes(registrar);
+            _rngFeature?.RegisterTypes(registrar);
+
             if (modules != null) {
                 for (var i = 0; i < modules.Count; i++) {
                     if (!TryGetModule(modules[i], out var module)) {
@@ -57,6 +66,8 @@ namespace unigame.staticecs.unity {
             Report.worldInitialized = true;
 
             CreateSystems();
+
+            RegisterBuiltinSystems();
 
             if (modules != null) {
                 for (var i = 0; i < modules.Count; i++) {
@@ -141,6 +152,20 @@ namespace unigame.staticecs.unity {
             DestroyWorldIfNeeded();
             EcsServiceRegistry.Unregister(this);
             _lifeTime.Terminate();
+        }
+
+        private void RegisterBuiltinSystems() {
+            if (_timeFeature == null) {
+                return;
+            }
+
+            if (_updateSystemsCreated) {
+                _timeFeature.RegisterSystems(new StaticEcsSystemsBuilder<TWorld, StaticEcsUpdateSystems>());
+            }
+
+            if (_fixedSystemsCreated) {
+                _timeFeature.RegisterSystems(new StaticEcsSystemsBuilder<TWorld, StaticEcsFixedUpdateSystems>());
+            }
         }
 
         private static bool TryGetModule(
