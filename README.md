@@ -20,19 +20,19 @@ Unity-facing слой `com.unigame.staticecs`: bootstrap, конвертеры, 
 
 ### Базовые контракты
 
-- [`IStaticEcsConverter<TWorld>`](Runtime/Conversion/IStaticEcsConverter.cs) — общий интерфейс с `IsEnabled` и `Apply(entity, host)`. Реализуется и mono-, и SO-, и сериализуемыми классами.
-- [`IStaticEcsConverterDestroyHandler<TWorld>`](Runtime/Conversion/IStaticEcsConverter.cs) — опциональная очистка при разрушении сущности (вернуть pool, отписать listener).
-- [`IStaticEcsLinkResolver<TWorld>`](Runtime/Conversion/IStaticEcsConverter.cs) — опциональный hook на втором проходе для конвертеров, которым нужно дописать link-зависимости после `CreateEntity` (см. ниже про link-resolve в пресетах).
+- [`IEcsConverter<TWorld>`](Runtime/Conversion/IEcsConverter.cs) — общий интерфейс с `IsEnabled` и `Apply(entity, host)`. Реализуется и mono-, и SO-, и сериализуемыми классами.
+- [`IEcsConverterDestroyHandler<TWorld>`](Runtime/Conversion/IEcsConverter.cs) — опциональная очистка при разрушении сущности (вернуть pool, отписать listener).
+- [`IEcsLinkResolver<TWorld>`](Runtime/Conversion/IEcsConverter.cs) — опциональный hook на втором проходе для конвертеров, которым нужно дописать link-зависимости после `CreateEntity` (см. ниже про link-resolve в пресетах).
 
 ### Базовая иерархия
 
 ```mermaid
 flowchart TB
-  Provider["UniGameStaticEcsEntityProvider TWorld"]
+  Provider["EcsEntityProvider TWorld"]
   UpstreamProviders["upstream providers<br/>SerializeReference List IComponentOrTagProvider"]
-  Serialized["serializableConverters<br/>SerializeReference List IStaticEcsConverter"]
-  Assets["assetConverters<br/>List StaticEcsConverterAsset"]
-  Mono["GetComponents<br/>IStaticEcsConverter on same GO"]
+  Serialized["serializableConverters<br/>SerializeReference List IEcsConverter"]
+  Assets["assetConverters<br/>List EcsConverterAsset"]
+  Mono["GetComponents<br/>IEcsConverter on same GO"]
   Pipeline["Apply foreach with IsEnabled filter"]
   Entity["World Entity"]
   ResolveLinks["ResolveLinks dispatch"]
@@ -53,44 +53,46 @@ flowchart TB
 
 ### Корневой провайдер
 
-[`UniGameStaticEcsEntityProvider<TWorld>`](Runtime/Conversion/UniGameStaticEcsEntityProvider.cs) наследуется от upstream `StaticEcsEntityProvider<TWorld>` и добавляет два сериализованных списка:
+[`EcsEntityProvider<TWorld>`](Runtime/Conversion/EcsEntityProvider.cs) наследуется от upstream `StaticEcsEntityProvider<TWorld>` и добавляет два сериализованных списка:
 
-- `serializableConverters` — `[SerializeReference] List<IStaticEcsConverter<TWorld>>`;
-- `assetConverters` — `[SerializeField] List<StaticEcsConverterAsset<TWorld>>` (ScriptableObject).
+- `serializableConverters` — `[SerializeReference] List<IEcsConverter<TWorld>>`;
+- `assetConverters` — `[SerializeField] List<EcsConverterAsset<TWorld>>` (ScriptableObject).
 
 При `CreateEntity()`:
 
 1. вызывается upstream `base.CreateEntity()` — он применяет свой собственный сериализованный `providers` (`ComponentProvider`/`TagProvider`/`LinkProvider`/...);
 2. собирается единый список:
-   - `GetComponents<IStaticEcsConverter<TWorld>>()` на том же `GameObject` (исключая сам провайдер);
+   - `GetComponents<IEcsConverter<TWorld>>()` на том же `GameObject` (исключая сам провайдер);
    - все элементы `serializableConverters`;
    - все элементы `assetConverters`;
    - все элементы, добавленные через `RegisterRuntime(...)`;
 3. для каждого конвертера, у которого `IsEnabled == true`, вызывается `Apply(entity, gameObject)`.
 
-При `OnDestroy` корневой провайдер сначала диспатчит `IStaticEcsConverterDestroyHandler<TWorld>.OnEntityDestroyed` для всех собранных конвертеров (пока сущность ещё жива), затем выполняется upstream-логика разрушения сущности.
+При `OnDestroy` корневой провайдер сначала диспатчит `IEcsConverterDestroyHandler<TWorld>.OnEntityDestroyed` для всех собранных конвертеров (пока сущность ещё жива), затем выполняется upstream-логика разрушения сущности.
 
-При `ResolveLinks` (post-create hook upstream) после стандартного `base.ResolveLinks()` вызываются все конвертеры, реализующие `IStaticEcsLinkResolver<TWorld>`.
+При `ResolveLinks` (post-create hook upstream) после стандартного `base.ResolveLinks()` вызываются все конвертеры, реализующие `IEcsLinkResolver<TWorld>`.
+
+Если префаб инстанцируется до того, как Static ECS-сервис поднимется (`World<TWorld>.Status != Initialized`), `EcsEntityProvider` ставит создание сущности в отложенный режим и автоматически выполняет его на ближайшем `Update` после готовности мира — `Awake`/`Start` upstream больше не пишут warning.
 
 Для каждого мира делается тонкий sealed-наследник, иначе Unity не привяжет generic MonoBehaviour к префабу:
 
 ```csharp
-public sealed class GameEntityProvider : UniGameStaticEcsEntityProvider<GameWorld> { }
+public sealed class GameEntityProvider : EcsEntityProvider<GameWorld> { }
 ```
 
 Для проектов с одним миром в пакете уже есть готовый non-generic `StaticEcsEntityProvider`, привязанный к дефолтному миру `Main` — см. секцию [Default world](#default-world).
 
 ### Mono-конвертер
 
-[`StaticEcsMonoConverter<TWorld>`](Runtime/Conversion/StaticEcsMonoConverter.cs) — абстрактный `MonoBehaviour`, реализует `IStaticEcsConverter<TWorld>`. **Awake-регистрация больше не нужна** — корневой провайдер сам собирает конвертеры через `GetComponents` на том же `GameObject` в момент `CreateEntity`. Достаточно повесить mono-конвертер сиблингом провайдера.
+[`EcsMonoConverter<TWorld>`](Runtime/Conversion/EcsMonoConverter.cs) — абстрактный `MonoBehaviour`, реализует `IEcsConverter<TWorld>`. **Awake-регистрация не нужна** — корневой провайдер сам собирает конвертеры через `GetComponents` на том же `GameObject` в момент `CreateEntity`. Достаточно повесить mono-конвертер сиблингом провайдера.
 
 `IsEnabled` по умолчанию = `_isEnabled && isActiveAndEnabled` (поле `_isEnabled` сериализуется и доступно в инспекторе).
 
-Для типового кейса «один компонент, который собираем из живых Unity-ссылок» используйте `StaticEcsMonoConverter<TWorld, TComponent>` и переопределите `TComponent Build(GameObject host)`:
+Для типового кейса «один компонент, который собираем из живых Unity-ссылок» используйте `EcsMonoConverter<TWorld, TComponent>` и переопределите `TComponent Build(GameObject host)`:
 
 ```csharp
 public sealed class DemoMovementSpeedConverter
-    : StaticEcsMonoConverter<Main, DemoMovementComponent> {
+    : EcsMonoConverter<Main, DemoMovementComponent> {
     [SerializeField] private float _speed = 5f;
 
     protected override DemoMovementComponent Build(GameObject host) {
@@ -103,11 +105,11 @@ public sealed class DemoMovementSpeedConverter
 
 ### ScriptableObject конвертеры
 
-[`StaticEcsConverterAsset<TWorld>`](Runtime/Conversion/StaticEcsConverterAsset.cs) — абстрактная база для SO-конвертеров. Реализует `IStaticEcsConverter<TWorld>` и попадает напрямую в `assetConverters` корневого провайдера — никаких дополнительных MonoBehaviour-обёрток не нужно.
+[`EcsConverterAsset<TWorld>`](Runtime/Conversion/EcsConverterAsset.cs) — абстрактная база для SO-конвертеров. Реализует `IEcsConverter<TWorld>` и попадает напрямую в `assetConverters` корневого провайдера — никаких дополнительных MonoBehaviour-обёрток не нужно.
 
 ```csharp
 [CreateAssetMenu(menuName = "Game/Converters/Stat Setup")]
-public sealed class GameStatSetupAsset : StaticEcsConverterAsset {
+public sealed class GameStatSetupAsset : EcsConverterAsset {
     [SerializeField] private float _baseHealth = 100f;
 
     public override void Apply(World<Main>.Entity entity, GameObject host) {
@@ -118,18 +120,18 @@ public sealed class GameStatSetupAsset : StaticEcsConverterAsset {
 
 ### Пресеты как nested-конвертеры
 
-[`StaticEcsConverterPreset<TWorld>`](Runtime/Conversion/Presets/StaticEcsConverterPreset.cs) — наследник `StaticEcsConverterAsset<TWorld>`. Хранит:
+[`EcsConverterPreset<TWorld>`](Runtime/Conversion/Presets/EcsConverterPreset.cs) — наследник `EcsConverterAsset<TWorld>`. Хранит:
 
 - `[SerializeReference] List<IComponentOrTagProvider> providers` — поддерживаются стандартные `ComponentProvider`/`TagProvider`/`MultiProvider`;
-- `[SerializeReference] List<IStaticEcsConverter<TWorld>> nestedConverters` — любые конвертеры, реализующие общий интерфейс (включая другие пресеты, переданные через ссылку на SO).
+- `[SerializeReference] List<IEcsConverter<TWorld>> nestedConverters` — любые конвертеры, реализующие общий интерфейс (включая другие пресеты, переданные через ссылку на SO).
 
-Поскольку пресет сам реализует `IStaticEcsConverter<TWorld>`, его можно положить и в `assetConverters` корневого провайдера, и в `nestedConverters` другого пресета — пайплайн обходит вложенность рекурсивно через единую `Apply`-точку.
+Поскольку пресет сам реализует `IEcsConverter<TWorld>`, его можно положить и в `assetConverters` корневого провайдера, и в `nestedConverters` другого пресета — пайплайн обходит вложенность рекурсивно через единую `Apply`-точку.
 
-Известное ограничение: `LinkProvider`/`LinksProvider` upstream — `internal`, поэтому второй проход link-resolve внутри пресета не реализован. Для link-зависимостей используйте upstream-`providers` корневого провайдера (он резолвится через стандартный `ResolveLinks`) или собственный конвертер с `IStaticEcsLinkResolver<TWorld>`.
+Известное ограничение: `LinkProvider`/`LinksProvider` upstream — `internal`, поэтому второй проход link-resolve внутри пресета не реализован. Для link-зависимостей используйте upstream-`providers` корневого провайдера (он резолвится через стандартный `ResolveLinks`) или собственный конвертер с `IEcsLinkResolver<TWorld>`.
 
 ### Cleanup
 
-Конвертер, реализующий `IStaticEcsConverterDestroyHandler<TWorld>`, получает `OnEntityDestroyed(entity, host)` непосредственно перед тем, как корневой провайдер дёрнет upstream-разрушение сущности. Для триггера достаточно `OnDestroyType.DestroyEntity` на провайдере; единая точка диспатча — `OnDestroy` корневого `UniGameStaticEcsEntityProvider`.
+Конвертер, реализующий `IEcsConverterDestroyHandler<TWorld>`, получает `OnEntityDestroyed(entity, host)` непосредственно перед тем, как корневой провайдер дёрнет upstream-разрушение сущности. Для триггера достаточно `OnDestroyType.DestroyEntity` на провайдере; единая точка диспатча — `OnDestroy` корневого `EcsEntityProvider`.
 
 ### Runtime-регистрация
 
@@ -137,9 +139,9 @@ public sealed class GameStatSetupAsset : StaticEcsConverterAsset {
 
 ### Проверочный чек-лист
 
-- наследник `UniGameStaticEcsEntityProvider<TWorld>` стоит на префабе и виден в Static ECS View;
+- наследник `EcsEntityProvider<TWorld>` стоит на префабе и виден в Static ECS View;
 - mono-конвертеры являются сиблингами провайдера на том же `GameObject` (под-объекты не сканируются);
-- generic-классы (`StaticEcsMonoConverter<,,>`, `TransformBindingConverter<>`, `StaticEcsConverterAsset<>`, `StaticEcsConverterPreset<>`) на префабах/SO не используются напрямую — только через sealed-наследников;
+- generic-классы (`EcsMonoConverter<,,>`, `TransformBindingConverter<>`, `EcsConverterAsset<>`, `EcsConverterPreset<>`) на префабах/SO не используются напрямую — только через sealed-наследников;
 - системе, которая читает Unity-ссылку, достаточно `entity.Read<TransformBindingComponent>()` или собственного компонента, заполненного конвертером, — никаких side-channel registries не нужно;
 - link-зависимости лежат в upstream-`providers` корневого провайдера, а не в пресете.
 
@@ -155,15 +157,19 @@ public struct Main : IWorldType { }
 
 | Generic API (multi-world) | Non-generic фасад (`Main`) |
 | --- | --- |
-| `UniGameStaticEcsEntityProvider<TWorld>` | [`StaticEcsEntityProvider`](Runtime/Conversion/StaticEcsEntityProvider.cs) |
+| `EcsEntityProvider<TWorld>` | [`StaticEcsEntityProvider`](Runtime/Conversion/StaticEcsEntityProvider.cs) |
 | `StaticEcsServiceSource<TWorld>` | [`StaticEcsServiceSource`](Runtime/Bootstrap/StaticEcsServiceSource.cs) |
 | `StaticEcsModuleConfig<TWorld>` | [`StaticEcsModule`](Runtime/Config/StaticEcsModule.cs) |
-| `StaticEcsMonoConverter<TWorld>` / `<TWorld, TComponent>` | [`StaticEcsMonoConverter`](Runtime/Conversion/StaticEcsMonoConverter.cs) (без компонента) / `StaticEcsMonoConverter<Main, TComponent>` |
-| `StaticEcsConverterAsset<TWorld>` | [`StaticEcsConverterAsset`](Runtime/Conversion/StaticEcsConverterAsset.cs) |
-| `StaticEcsConverterPreset<TWorld>` | [`StaticEcsConverterPreset`](Runtime/Conversion/Presets/StaticEcsConverterPreset.cs) |
+| `EcsMonoConverter<TWorld>` / `<TWorld, TComponent>` | [`EcsMonoConverter`](Runtime/Conversion/EcsMonoConverter.cs) (без компонента) / `EcsMonoConverter<Main, TComponent>` |
+| `EcsConverterAsset<TWorld>` | [`EcsConverterAsset`](Runtime/Conversion/EcsConverterAsset.cs) |
+| `EcsConverterPreset<TWorld>` | [`EcsConverterPreset`](Runtime/Conversion/Presets/EcsConverterPreset.cs) |
 | `TransformBindingConverter<TWorld>` | [`TransformBindingConverter`](Runtime/Conversion/Bindings/TransformBindingConverter.cs) |
 
 Multi-world проекты пользуются generic-веткой как раньше; non-generic классы — обычные `sealed`-обёртки и не ломают расширяемость.
+
+## Service
+
+[`IEcsService`](Runtime/Service/IEcsService.cs) — публикуемый в `IContext` сервис. Конкретная реализация — generic [`EcsService<TWorld>`](Runtime/Service/EcsService.cs); поднимается из `StaticEcsServiceSource<TWorld>` или non-generic `StaticEcsServiceSource` (мир `Main`). Для отладки последний поднявшийся сервис доступен через [`EcsServiceRegistry.Active`](Runtime/Service/EcsServiceRegistry.cs) и `EcsServiceRegistry.LastReport` ([`EcsStartupReport`](Runtime/Service/EcsStartupReport.cs)). Тики обоих pipeline'ов гонит [`EcsRunner<TWorld>`](Runtime/Service/EcsRunner.cs) на `PlayerLoopTiming` из `StaticEcsSystemsConfig`.
 
 ## Editor tooling
 
@@ -181,33 +187,33 @@ Editor-сборка (`Editor/unigame.staticecs.editor.asmdef`) подгружа�
 
 ### Service source inspector
 
-[`StaticEcsServiceSourceInspectorBase<TWorld>`](Editor/Validation/StaticEcsServiceSourceInspectorBase.cs) — базовый inspector с проверками:
+[`EcsServiceSourceInspector<TWorld>`](Editor/Validation/EcsServiceSourceInspector.cs) — базовый inspector с проверками:
 
 - модули назначены и содержат хотя бы один enabled;
 - нет дубликатов модулей;
-- все модули совместимы с миром `TWorld` (наследуют `StaticEcsModuleConfig<TWorld>`);
+- все модули совместимы с миром `TWorld` (наследуют `StaticEcsModuleConfig<TWorld>`).
 
 Чтобы привязать его к своему `ServiceSource`, объявите `[CustomEditor(typeof(MyServiceSource))]`-наследника:
 
 ```csharp
 [CustomEditor(typeof(StaticEcsServiceSource))]
 public sealed class StaticEcsMainSourceInspector
-    : StaticEcsServiceSourceInspectorBase<Main> { }
+    : EcsServiceSourceInspector<Main> { }
 ```
 
 ### Static ECS View с проектными вкладками
 
-Upstream `StaticEcsView<TWorld, TEntityProvider, TEventProvider>` (FFS) — окно отладки. Расширение [`UniGameStaticEcsView<TWorld, TEntityProvider, TEventProvider>`](Editor/View/UniGameStaticEcsView.cs) добавляет туда проектные вкладки через рефлексию (private-поле `_tabs`):
+Upstream `StaticEcsView<TWorld, TEntityProvider, TEventProvider>` (FFS) — окно отладки. Расширение [`EcsView<TWorld, TEntityProvider, TEventProvider>`](Editor/View/EcsView.cs) добавляет туда проектные вкладки через рефлексию (private-поле `_tabs`):
 
 - [`GameModulesTab`](Editor/View/Tabs/GameModulesTab.cs) — список модулей сервиса и их состояние (enabled / зарегистрированные типы);
-- [`BootstrapReportTab`](Editor/View/Tabs/BootstrapReportTab.cs) — последний `StaticEcsStartupReport` (success/world/modules/updates);
+- [`BootstrapReportTab`](Editor/View/Tabs/BootstrapReportTab.cs) — последний `EcsStartupReport` (success/world/modules/updates);
 - [`FeatureCatalogTab<TWorld>`](Editor/View/Tabs/FeatureCatalogTab.cs) — каталог `IStaticEcsFeature<TWorld>`-реализаций, найденных через рефлексию.
 
 Если upstream поменяет имя приватного поля, окно один раз залогирует warning и просто откроется без проектных вкладок — runtime не ломается. В таком случае нужно поднять версию `unigame.staticecs.unity` под актуальный upstream.
 
 ### Меню `Tools/UniGame/Static ECS`
 
-[`UniGameStaticEcsMenu`](Editor/Menu/UniGameStaticEcsMenu.cs):
+[`EcsMenu`](Editor/Menu/EcsMenu.cs):
 
 - `Tools/UniGame/Static ECS/Fix Broken Providers` — открывает upstream `BrokenProvidersFixerWindow` (поиск/починка `StaticEcsEntityProvider` с битыми ссылками после переименования компонентов).
 - `Tools/UniGame/Static ECS/Documentation/Open Knowledge Base` — открывает локальную knowledge-base `docs/knowledge/static-ecs/index.md`.
@@ -218,7 +224,7 @@ Upstream `StaticEcsView<TWorld, TEntityProvider, TEventProvider>` (FFS) — ок
 - `com.unigame.staticecs.unity` (этот же пакет, Runtime asmdef);
 - `com.unigame.contextdata` — `ServiceDataSourceAsset` для `StaticEcsServiceSource`;
 - `com.unigame.unicore` — общие contracts;
-- `com.cysharp.unitask` — `StaticEcsRunner`;
+- `com.cysharp.unitask` — `EcsRunner`;
 - upstream `com.felid-force-studios.static-ecs-unity` — провайдеры, окно и инструменты, которые мы расширяем.
 
 Editor-сборка ссылается дополнительно на `FFS.StaticEcs.Unity.Editor` (upstream Editor) и `unigame.contextdata.runtime`.

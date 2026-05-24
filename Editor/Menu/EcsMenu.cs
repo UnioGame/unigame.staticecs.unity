@@ -2,7 +2,7 @@ using FFS.Libraries.StaticEcs.Unity.Editor;
 using UnityEditor;
 
 namespace UniGame.StaticEcs.Editor.Menu {
-    public static class UniGameStaticEcsMenu {
+    public static class EcsMenu {
         private const string Root = "Tools/UniGame/Static ECS/";
 
         [MenuItem(Root + "Fix Broken Providers", priority = 200)]

@@ -2,7 +2,7 @@ using System;
 
 namespace unigame.staticecs.unity {
     [Serializable]
-    public class StaticEcsStartupReport {
+    public class EcsStartupReport {
         public bool worldCreated;
         public bool typesRegistered;
         public bool worldInitialized;

@@ -6,21 +6,21 @@ using UniGame.Core.Runtime;
 using UnityEngine;
 
 namespace unigame.staticecs.unity {
-    public abstract class StaticEcsServiceSource<TWorld> : ServiceDataSourceAsset<IStaticEcsService>
+    public abstract class StaticEcsServiceSource<TWorld> : ServiceDataSourceAsset<IEcsService>
         where TWorld : struct, IWorldType {
         public StaticEcsWorldConfig world = StaticEcsWorldConfig.Default;
         public StaticEcsSystemsConfig systems = StaticEcsSystemsConfig.Default;
         public List<StaticEcsModuleConfig> modules = new();
 
-        protected override UniTask<IStaticEcsService> CreateServiceInternalAsync(IContext context) {
-            var service = new StaticEcsService<TWorld>(world, systems);
+        protected override UniTask<IEcsService> CreateServiceInternalAsync(IContext context) {
+            var service = new EcsService<TWorld>(world, systems);
             service.Initialize(modules);
 
             context.Publish(service.Report);
 
-            new StaticEcsRunner<TWorld>(service, systems).Start();
+            new EcsRunner<TWorld>(service, systems).Start();
 
-            return UniTask.FromResult<IStaticEcsService>(service);
+            return UniTask.FromResult<IEcsService>(service);
         }
     }
 

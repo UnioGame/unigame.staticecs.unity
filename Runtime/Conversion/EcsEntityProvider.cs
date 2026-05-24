@@ -4,30 +4,30 @@ using FFS.Libraries.StaticEcs.Unity;
 using UnityEngine;
 
 namespace unigame.staticecs.unity {
-    public abstract class UniGameStaticEcsEntityProvider<TWorld> : StaticEcsEntityProvider<TWorld>
+    public abstract class EcsEntityProvider<TWorld> : StaticEcsEntityProvider<TWorld>
         where TWorld : struct, IWorldType {
         [SerializeReference]
-        public List<IStaticEcsConverter<TWorld>> serializableConverters = new();
+        public List<IEcsConverter<TWorld>> serializableConverters = new();
 
         [SerializeField]
-        public List<StaticEcsConverterAsset<TWorld>> assetConverters = new();
+        public List<EcsConverterAsset<TWorld>> assetConverters = new();
 
-        private readonly List<IStaticEcsConverter<TWorld>> _runtime = new();
-        private readonly List<IStaticEcsConverter<TWorld>> _monoBuf = new();
-        private readonly List<IStaticEcsConverter<TWorld>> _registered = new();
+        private readonly List<IEcsConverter<TWorld>> _runtime = new();
+        private readonly List<IEcsConverter<TWorld>> _monoBuf = new();
+        private readonly List<IEcsConverter<TWorld>> _registered = new();
 
         private bool _pendingDeferredCreate;
 
-        public IReadOnlyList<IStaticEcsConverter<TWorld>> RuntimeConverters => _runtime;
+        public IReadOnlyList<IEcsConverter<TWorld>> RuntimeConverters => _runtime;
 
-        public void RegisterRuntime(IStaticEcsConverter<TWorld> converter) {
+        public void RegisterRuntime(IEcsConverter<TWorld> converter) {
             if (converter == null || _registered.Contains(converter)) {
                 return;
             }
             _registered.Add(converter);
         }
 
-        public bool UnregisterRuntime(IStaticEcsConverter<TWorld> converter) {
+        public bool UnregisterRuntime(IEcsConverter<TWorld> converter) {
             return converter != null && _registered.Remove(converter);
         }
 
@@ -87,7 +87,7 @@ namespace unigame.staticecs.unity {
             if (!entityGid.TryUnpack<TWorld>(out var entity)) return;
 
             for (var i = 0; i < _runtime.Count; i++) {
-                if (_runtime[i] is IStaticEcsLinkResolver<TWorld> r) {
+                if (_runtime[i] is IEcsLinkResolver<TWorld> r) {
                     r.ResolveLinks(entity, gameObject);
                 }
             }
@@ -98,7 +98,7 @@ namespace unigame.staticecs.unity {
                 && entityGid.Status<TWorld>() == GIDStatus.Active
                 && entityGid.TryUnpack<TWorld>(out var entity)) {
                 for (var i = 0; i < _runtime.Count; i++) {
-                    if (_runtime[i] is IStaticEcsConverterDestroyHandler<TWorld> h) {
+                    if (_runtime[i] is IEcsConverterDestroyHandler<TWorld> h) {
                         h.OnEntityDestroyed(entity, gameObject);
                     }
                 }

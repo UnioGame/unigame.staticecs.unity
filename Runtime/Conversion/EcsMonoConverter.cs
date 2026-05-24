@@ -2,7 +2,7 @@ using FFS.Libraries.StaticEcs;
 using UnityEngine;
 
 namespace unigame.staticecs.unity {
-    public abstract class StaticEcsMonoConverter<TWorld> : MonoBehaviour, IStaticEcsConverter<TWorld>
+    public abstract class EcsMonoConverter<TWorld> : MonoBehaviour, IEcsConverter<TWorld>
         where TWorld : struct, IWorldType {
         [SerializeField]
         protected bool _isEnabled = true;
@@ -12,7 +12,7 @@ namespace unigame.staticecs.unity {
         public abstract void Apply(World<TWorld>.Entity entity, GameObject host);
     }
 
-    public abstract class StaticEcsMonoConverter<TWorld, TComponent> : StaticEcsMonoConverter<TWorld>
+    public abstract class EcsMonoConverter<TWorld, TComponent> : EcsMonoConverter<TWorld>
         where TWorld : struct, IWorldType
         where TComponent : struct, IComponent {
         public override void Apply(World<TWorld>.Entity entity, GameObject host) {
@@ -22,5 +22,5 @@ namespace unigame.staticecs.unity {
         protected abstract TComponent Build(GameObject host);
     }
 
-    public abstract class StaticEcsMonoConverter : StaticEcsMonoConverter<Main> { }
+    public abstract class EcsMonoConverter : EcsMonoConverter<Main> { }
 }

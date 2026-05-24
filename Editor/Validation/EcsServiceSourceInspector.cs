@@ -5,7 +5,7 @@ using UnityEditor;
 using UnityEngine;
 
 namespace UniGame.StaticEcs.Editor.Validation {
-    public abstract class StaticEcsServiceSourceInspectorBase<TWorld> : UnityEditor.Editor
+    public abstract class EcsServiceSourceInspector<TWorld> : UnityEditor.Editor
         where TWorld : struct, IWorldType {
         public override void OnInspectorGUI() {
             DrawDefaultInspector();

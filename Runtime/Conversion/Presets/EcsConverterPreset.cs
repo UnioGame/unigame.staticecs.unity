@@ -4,18 +4,18 @@ using FFS.Libraries.StaticEcs.Unity;
 using UnityEngine;
 
 namespace unigame.staticecs.unity {
-    public abstract class StaticEcsConverterPresetBase : StaticEcsConverterAssetBase { }
+    public abstract class EcsConverterPresetBase : EcsConverterAssetBase { }
 
-    public abstract class StaticEcsConverterPreset<TWorld> : StaticEcsConverterAsset<TWorld>
+    public abstract class EcsConverterPreset<TWorld> : EcsConverterAsset<TWorld>
         where TWorld : struct, IWorldType {
         [SerializeReference]
         protected List<IComponentOrTagProvider> providers = new();
 
         [SerializeReference]
-        protected List<IStaticEcsConverter<TWorld>> nestedConverters = new();
+        protected List<IEcsConverter<TWorld>> nestedConverters = new();
 
         public IReadOnlyList<IComponentOrTagProvider> Providers => providers;
-        public IReadOnlyList<IStaticEcsConverter<TWorld>> NestedConverters => nestedConverters;
+        public IReadOnlyList<IEcsConverter<TWorld>> NestedConverters => nestedConverters;
 
         public override void Apply(World<TWorld>.Entity entity, GameObject host) {
             if (providers != null) {
@@ -34,5 +34,5 @@ namespace unigame.staticecs.unity {
         }
     }
 
-    public abstract class StaticEcsConverterPreset : StaticEcsConverterPreset<Main> { }
+    public abstract class EcsConverterPreset : EcsConverterPreset<Main> { }
 }

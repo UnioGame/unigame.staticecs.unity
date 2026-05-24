@@ -7,7 +7,7 @@ using UnityEditor;
 using UnityEngine;
 
 namespace UniGame.StaticEcs.Editor.View {
-    public abstract class UniGameStaticEcsView<TWorld, TEntityProvider, TEventProvider>
+    public abstract class EcsView<TWorld, TEntityProvider, TEventProvider>
         : StaticEcsView<TWorld, TEntityProvider, TEventProvider>
         where TWorld : struct, IWorldType
         where TEntityProvider : StaticEcsEntityProvider<TWorld>
@@ -32,7 +32,7 @@ namespace UniGame.StaticEcs.Editor.View {
             if (TabsField == null) {
                 if (!_injectionWarningLogged) {
                     Debug.LogWarning(
-                        "[UniGameStaticEcsView] StaticEcsView._tabs field not found. Project tabs will not be injected. " +
+                        "[EcsView] StaticEcsView._tabs field not found. Project tabs will not be injected. " +
                         "Update unigame.staticecs.editor against the current Static ECS Unity package.");
                     _injectionWarningLogged = true;
                 }

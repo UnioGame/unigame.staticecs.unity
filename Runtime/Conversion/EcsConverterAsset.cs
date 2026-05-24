@@ -2,9 +2,9 @@ using FFS.Libraries.StaticEcs;
 using UnityEngine;
 
 namespace unigame.staticecs.unity {
-    public abstract class StaticEcsConverterAssetBase : ScriptableObject { }
+    public abstract class EcsConverterAssetBase : ScriptableObject { }
 
-    public abstract class StaticEcsConverterAsset<TWorld> : StaticEcsConverterAssetBase, IStaticEcsConverter<TWorld>
+    public abstract class EcsConverterAsset<TWorld> : EcsConverterAssetBase, IEcsConverter<TWorld>
         where TWorld : struct, IWorldType {
         [SerializeField]
         protected bool _isEnabled = true;
@@ -14,5 +14,5 @@ namespace unigame.staticecs.unity {
         public abstract void Apply(World<TWorld>.Entity entity, GameObject host);
     }
 
-    public abstract class StaticEcsConverterAsset : StaticEcsConverterAsset<Main> { }
+    public abstract class EcsConverterAsset : EcsConverterAsset<Main> { }
 }

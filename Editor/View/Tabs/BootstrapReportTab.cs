@@ -17,12 +17,12 @@ namespace UniGame.StaticEcs.Editor.View.Tabs {
         public void Destroy() { }
 
         public void Draw() {
-            EditorGUILayout.LabelField("StaticEcsStartupReport", EditorStyles.boldLabel);
+            EditorGUILayout.LabelField("EcsStartupReport", EditorStyles.boldLabel);
 
-            var report = StaticEcsServiceRegistry.LastReport;
+            var report = EcsServiceRegistry.LastReport;
             if (report == null) {
                 EditorGUILayout.HelpBox(
-                    "No StaticEcsService is currently registered. Reports become available once a StaticEcsServiceSource publishes a service into the GameContext during play mode.",
+                    "No EcsService is currently registered. Reports become available once a StaticEcsServiceSource publishes a service into the GameContext during play mode.",
                     MessageType.Info);
                 return;
             }

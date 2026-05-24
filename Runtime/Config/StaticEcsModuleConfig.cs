@@ -11,14 +11,14 @@ namespace unigame.staticecs.unity {
         where TWorld : struct, IWorldType {
         public virtual void RegisterTypes(World<TWorld>.TypeRegistrar types) { }
 
-        public virtual void RegisterUpdateSystems(StaticEcsService<TWorld> service) { }
+        public virtual void RegisterUpdateSystems(EcsService<TWorld> service) { }
 
-        public virtual void RegisterFixedUpdateSystems(StaticEcsService<TWorld> service) { }
+        public virtual void RegisterFixedUpdateSystems(EcsService<TWorld> service) { }
 
-        public virtual void RegisterLateUpdateSystems(StaticEcsService<TWorld> service) { }
+        public virtual void RegisterLateUpdateSystems(EcsService<TWorld> service) { }
 
-        public virtual void RegisterCleanupSystems(StaticEcsService<TWorld> service) { }
+        public virtual void RegisterCleanupSystems(EcsService<TWorld> service) { }
 
-        public virtual void OnWorldInitialized(StaticEcsService<TWorld> service) { }
+        public virtual void OnWorldInitialized(EcsService<TWorld> service) { }
     }
 }

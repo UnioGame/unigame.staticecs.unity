@@ -1,13 +1,11 @@
-using System;
 using System.Collections.Generic;
 using FFS.Libraries.StaticEcs;
 using UniGame.Core.Runtime;
-using UniGame.GameFlow.Runtime;
 using UniGame.Runtime.DataFlow;
 using unigame.staticecs;
 
 namespace unigame.staticecs.unity {
-    public sealed class StaticEcsService<TWorld> : IStaticEcsService
+    public sealed class EcsService<TWorld> : IEcsService
         where TWorld : struct, IWorldType {
         private readonly LifeTime _lifeTime = new();
         private readonly StaticEcsWorldConfig _worldConfig;
@@ -17,16 +15,16 @@ namespace unigame.staticecs.unity {
         private bool _lateSystemsCreated;
         private bool _cleanupSystemsCreated;
 
-        public StaticEcsService(
+        public EcsService(
             StaticEcsWorldConfig worldConfig,
             StaticEcsSystemsConfig systemsConfig) {
             _worldConfig = worldConfig;
             _systemsConfig = systemsConfig;
-            Report = new StaticEcsStartupReport();
-            StaticEcsServiceRegistry.Register(this);
+            Report = new EcsStartupReport();
+            EcsServiceRegistry.Register(this);
         }
 
-        public StaticEcsStartupReport Report { get; }
+        public EcsStartupReport Report { get; }
 
         public ILifeTime LifeTime => _lifeTime;
 
@@ -86,25 +84,25 @@ namespace unigame.staticecs.unity {
             Report.message = $"Static ECS world `{typeof(TWorld).Name}` initialized. Modules: {moduleCount}.";
         }
 
-        public StaticEcsService<TWorld> AddUpdateSystem<TSystem>(TSystem system, short order = 0)
+        public EcsService<TWorld> AddUpdateSystem<TSystem>(TSystem system, short order = 0)
             where TSystem : ISystem {
             World<TWorld>.Systems<StaticEcsUpdateSystems>.Add(system, order);
             return this;
         }
 
-        public StaticEcsService<TWorld> AddFixedUpdateSystem<TSystem>(TSystem system, short order = 0)
+        public EcsService<TWorld> AddFixedUpdateSystem<TSystem>(TSystem system, short order = 0)
             where TSystem : ISystem {
             World<TWorld>.Systems<StaticEcsFixedUpdateSystems>.Add(system, order);
             return this;
         }
 
-        public StaticEcsService<TWorld> AddLateUpdateSystem<TSystem>(TSystem system, short order = 0)
+        public EcsService<TWorld> AddLateUpdateSystem<TSystem>(TSystem system, short order = 0)
             where TSystem : ISystem {
             World<TWorld>.Systems<StaticEcsLateUpdateSystems>.Add(system, order);
             return this;
         }
 
-        public StaticEcsService<TWorld> AddCleanupSystem<TSystem>(TSystem system, short order = 0)
+        public EcsService<TWorld> AddCleanupSystem<TSystem>(TSystem system, short order = 0)
             where TSystem : ISystem {
             World<TWorld>.Systems<StaticEcsCleanupSystems>.Add(system, order);
             return this;
@@ -141,7 +139,7 @@ namespace unigame.staticecs.unity {
         public void Dispose() {
             DestroySystems();
             DestroyWorldIfNeeded();
-            StaticEcsServiceRegistry.Unregister(this);
+            EcsServiceRegistry.Unregister(this);
             _lifeTime.Terminate();
         }
 

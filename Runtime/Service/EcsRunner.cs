@@ -5,12 +5,12 @@ using FFS.Libraries.StaticEcs;
 using UnityEngine;
 
 namespace unigame.staticecs.unity {
-    public sealed class StaticEcsRunner<TWorld>
+    public sealed class EcsRunner<TWorld>
         where TWorld : struct, IWorldType {
-        private readonly StaticEcsService<TWorld> _service;
+        private readonly EcsService<TWorld> _service;
         private readonly StaticEcsSystemsConfig _config;
 
-        public StaticEcsRunner(StaticEcsService<TWorld> service, StaticEcsSystemsConfig config) {
+        public EcsRunner(EcsService<TWorld> service, StaticEcsSystemsConfig config) {
             _service = service;
             _config = config;
         }
