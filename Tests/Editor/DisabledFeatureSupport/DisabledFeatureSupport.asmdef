@@ -1,0 +1,14 @@
+{
+    "name": "unigame.staticecs.unity.tests.disabledsupport",
+    "rootNamespace": "UniGame.StaticEcs.Unity.Tests.DisabledSupport",
+    "references": [
+        "unigame.staticecs",
+        "unigame.staticecs.unity",
+        "unigame.contextdata.runtime",
+        "unigame.rx.runtime",
+        "FFS.StaticEcs",
+        "unigame.unicore.runtime"
+    ],
+    "includePlatforms": ["Editor"],
+    "noEngineReferences": false
+}
