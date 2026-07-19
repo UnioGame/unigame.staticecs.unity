@@ -1,116 +1,140 @@
+using System;
 using System.Collections.Generic;
+using System.Reflection;
+using System.Threading;
+using Cysharp.Threading.Tasks;
 using FFS.Libraries.StaticEcs;
+using UniGame.Context.Runtime;
 using UniGame.Core.Runtime;
 using UniGame.Runtime.DataFlow;
 
 namespace UniGame.StaticEcs.Unity
 {
-    using Random;
-    using Time;
-
+    /// <summary>Owns one Static ECS world and its Unity player-loop system groups.</summary>
     public sealed class EcsService<TWorld> : IEcsService
         where TWorld : struct, IWorldType
     {
         private readonly LifeTime _lifeTime = new();
+        private readonly List<IStaticEcsFeature<TWorld>> _runtimeFeatures = new();
         private readonly StaticEcsWorldConfig _worldConfig;
         private readonly StaticEcsSystemsConfig _systemsConfig;
-        private readonly EcsTimeFeature<TWorld> _timeFeature;
-        private readonly EcsRngFeature<TWorld> _rngFeature;
         private bool _updateSystemsCreated;
         private bool _fixedSystemsCreated;
         private bool _lateSystemsCreated;
         private bool _cleanupSystemsCreated;
+        private bool _registered;
 
-        public EcsService(StaticEcsWorldConfig worldConfig,
-            StaticEcsSystemsConfig systemsConfig)
+        /// <summary>Creates an uninitialized ECS service.</summary>
+        public EcsService(StaticEcsWorldConfig worldConfig, StaticEcsSystemsConfig systemsConfig)
         {
             _worldConfig = worldConfig;
             _systemsConfig = systemsConfig;
-            _timeFeature = systemsConfig.disableEcsTime ? null : new EcsTimeFeature<TWorld>();
-            _rngFeature = systemsConfig.disableEcsRng ? null : new EcsRngFeature<TWorld>();
-
             Report = new EcsStartupReport();
-
-            EcsServiceRegistry.Register(this);
         }
 
+        /// <inheritdoc />
         public EcsStartupReport Report { get; }
 
+        /// <summary>Gets the lifetime owned by this service.</summary>
         public ILifeTime LifeTime => _lifeTime;
 
+        /// <inheritdoc />
         public bool IsInitialized => World<TWorld>.Status == WorldStatus.Initialized;
 
-        public void Initialize(IReadOnlyList<StaticEcsModuleConfig> modules)
+        /// <summary>Initializes enabled features in their configured order.</summary>
+        public async UniTask InitializeAsync(
+            IReadOnlyList<StaticEcsFeatureEntry> entries,
+            IContext context,
+            CancellationToken cancellationToken)
         {
+            DestroySystems();
             DestroyWorldIfNeeded();
+            DisposeRuntimeFeatures();
+            ResetReport();
 
-            var worldConfig = _worldConfig.CreateWorldConfig();
-
-            World<TWorld>.Create(worldConfig);
-
-            Report.worldCreated = true;
-
-            var worldTypes = World<TWorld>.Types();
-            var moduleCount = 0;
-
-            _timeFeature?.RegisterTypes(worldTypes);
-            _rngFeature?.RegisterTypes(worldTypes);
-
-            if (modules != null)
+            var assemblies = new HashSet<Assembly>();
+            try
             {
-                for (var i = 0; i < modules.Count; i++)
+                Report.stage = EcsStartupStage.CreateFeatures;
+                CreateRuntimeFeatures(entries, context, assemblies);
+                cancellationToken.ThrowIfCancellationRequested();
+
+                Report.stage = EcsStartupStage.CreateWorld;
+                World<TWorld>.Create(_worldConfig.CreateWorldConfig());
+                Report.worldCreated = true;
+
+                Report.stage = EcsStartupStage.RegisterTypes;
+                var types = World<TWorld>.Types();
+                for (var i = 0; i < _runtimeFeatures.Count; i++)
                 {
-                    if (!TryGetModule(modules[i], out var module))
-                        continue;
-
-
-                    module.RegisterTypes(worldTypes);
-                    moduleCount++;
-                }
-            }
-
-            Report.modulesRegistered = moduleCount;
-            Report.typesRegistered = true;
-
-            World<TWorld>.Initialize(_worldConfig.baseEntitiesCapacity);
-            Report.worldInitialized = true;
-
-            CreateSystems();
-
-            RegisterBuiltinSystems();
-
-            if (modules != null)
-            {
-                for (var i = 0; i < modules.Count; i++)
-                {
-                    if (!TryGetModule(modules[i], out var module))
+                    cancellationToken.ThrowIfCancellationRequested();
+                    var feature = _runtimeFeatures[i];
+                    Report.currentFeature = feature.FeatureName;
+                    if (feature is IStaticEcsTypeFeature<TWorld> typeFeature)
                     {
-                        continue;
-                    }
-
-                    module.RegisterUpdateSystems(this);
-                    module.RegisterFixedUpdateSystems(this);
-                    module.RegisterLateUpdateSystems(this);
-                    module.RegisterCleanupSystems(this);
-                }
-            }
-
-            InitializeSystems();
-
-            if (modules != null)
-            {
-                for (var i = 0; i < modules.Count; i++)
-                {
-                    if (TryGetModule(modules[i], out var module))
-                    {
-                        module.OnWorldInitialized(this);
+                        typeFeature.RegisterTypes(types);
                     }
                 }
-            }
 
-            Report.message = $"Static ECS world `{typeof(TWorld).Name}` initialized. Modules: {moduleCount}.";
+                RegisterFeatureAssemblies(types, assemblies);
+                Report.typesRegistered = true;
+
+                Report.stage = EcsStartupStage.InitializeWorld;
+                Report.currentFeature = null;
+                World<TWorld>.Initialize(_worldConfig.baseEntitiesCapacity);
+                Report.worldInitialized = true;
+
+                Report.stage = EcsStartupStage.CreateSystems;
+                CreateSystems();
+
+                Report.stage = EcsStartupStage.RegisterSystems;
+                for (var i = 0; i < _runtimeFeatures.Count; i++)
+                {
+                    cancellationToken.ThrowIfCancellationRequested();
+                    var feature = _runtimeFeatures[i];
+                    Report.currentFeature = feature.FeatureName;
+                    await RegisterFeatureSystemsAsync(feature, cancellationToken);
+                }
+
+                Report.stage = EcsStartupStage.InitializeSystems;
+                Report.currentFeature = null;
+                InitializeSystems();
+
+                Report.stage = EcsStartupStage.StartFeatures;
+                for (var i = 0; i < _runtimeFeatures.Count; i++)
+                {
+                    cancellationToken.ThrowIfCancellationRequested();
+                    var feature = _runtimeFeatures[i];
+                    Report.currentFeature = feature.FeatureName;
+                    if (feature is IStaticEcsStartupFeature<TWorld> startupFeature)
+                    {
+                        await startupFeature.StartAsync(cancellationToken);
+                    }
+                }
+
+                Report.stage = EcsStartupStage.Completed;
+                Report.currentFeature = null;
+                Report.featuresRegistered = _runtimeFeatures.Count;
+                Report.message =
+                    $"Static ECS world `{typeof(TWorld).Name}` initialized. Features: {_runtimeFeatures.Count}.";
+                EcsServiceRegistry.Register(this);
+                _registered = true;
+            }
+            catch (Exception exception)
+            {
+                Report.failedFeature = Report.currentFeature;
+                Report.failedStage = Report.stage;
+                Report.message =
+                    $"Static ECS startup failed during {Report.stage} for `{Report.currentFeature ?? "world"}`: " +
+                    exception.Message;
+                DestroySystems();
+                DestroyWorldIfNeeded();
+                DisposeRuntimeFeatures();
+                throw;
+            }
         }
 
+        /// <summary>Adds a system to the update group.</summary>
         public EcsService<TWorld> AddUpdateSystem<TSystem>(TSystem system, short order = 0)
             where TSystem : ISystem
         {
@@ -118,6 +142,7 @@ namespace UniGame.StaticEcs.Unity
             return this;
         }
 
+        /// <summary>Adds a system to the fixed-update group.</summary>
         public EcsService<TWorld> AddFixedUpdateSystem<TSystem>(TSystem system, short order = 0)
             where TSystem : ISystem
         {
@@ -125,6 +150,7 @@ namespace UniGame.StaticEcs.Unity
             return this;
         }
 
+        /// <summary>Adds a system to the late-update group.</summary>
         public EcsService<TWorld> AddLateUpdateSystem<TSystem>(TSystem system, short order = 0)
             where TSystem : ISystem
         {
@@ -132,6 +158,7 @@ namespace UniGame.StaticEcs.Unity
             return this;
         }
 
+        /// <summary>Adds a system to the cleanup group.</summary>
         public EcsService<TWorld> AddCleanupSystem<TSystem>(TSystem system, short order = 0)
             where TSystem : ISystem
         {
@@ -139,6 +166,7 @@ namespace UniGame.StaticEcs.Unity
             return this;
         }
 
+        /// <inheritdoc />
         public void Update()
         {
             if (!_updateSystemsCreated)
@@ -151,6 +179,7 @@ namespace UniGame.StaticEcs.Unity
             Report.updateCount++;
         }
 
+        /// <inheritdoc />
         public void FixedUpdate()
         {
             if (_fixedSystemsCreated)
@@ -159,6 +188,7 @@ namespace UniGame.StaticEcs.Unity
             }
         }
 
+        /// <inheritdoc />
         public void LateUpdate()
         {
             if (_lateSystemsCreated)
@@ -167,6 +197,7 @@ namespace UniGame.StaticEcs.Unity
             }
         }
 
+        /// <inheritdoc />
         public void CleanupUpdate()
         {
             if (_cleanupSystemsCreated)
@@ -175,61 +206,160 @@ namespace UniGame.StaticEcs.Unity
             }
         }
 
+        /// <inheritdoc />
         public void Dispose()
         {
+            _lifeTime.Terminate();
             DestroySystems();
             DestroyWorldIfNeeded();
-            EcsServiceRegistry.Unregister(this);
-            _lifeTime.Terminate();
+            DisposeRuntimeFeatures();
+            if (_registered)
+            {
+                EcsServiceRegistry.Unregister(this);
+                _registered = false;
+            }
         }
 
-        private void RegisterBuiltinSystems()
+        private void CreateRuntimeFeatures(
+            IReadOnlyList<StaticEcsFeatureEntry> entries,
+            IContext context,
+            HashSet<Assembly> assemblies)
         {
-            if (_timeFeature == null)
+            if (entries == null)
             {
                 return;
             }
 
-            if (_updateSystemsCreated)
+            var assets = new HashSet<StaticEcsFeatureAssetBase>();
+            for (var i = 0; i < entries.Count; i++)
             {
-                _timeFeature.RegisterSystems(new StaticEcsSystemsBuilder<TWorld, StaticEcsUpdateSystems>());
+                var entry = entries[i];
+                if (entry == null || !entry.enabled || entry.asset == null)
+                {
+                    continue;
+                }
+
+                var asset = entry.asset;
+                if (!assets.Add(asset))
+                {
+                    throw new InvalidOperationException($"Feature asset `{asset.name}` is listed more than once.");
+                }
+
+                if (asset.WorldType != typeof(TWorld))
+                {
+                    throw new InvalidOperationException(
+                        $"Feature asset `{asset.name}` targets `{asset.WorldType.Name}`, expected `{typeof(TWorld).Name}`.");
+                }
+
+                Report.currentFeature = asset.FeatureName;
+                var runtime = asset.CreateRuntimeFeature(context) as IStaticEcsFeature<TWorld>;
+                if (runtime == null)
+                {
+                    throw new InvalidOperationException(
+                        $"Feature asset `{asset.name}` did not create an IStaticEcsFeature<{typeof(TWorld).Name}> instance.");
+                }
+
+                _runtimeFeatures.Add(runtime);
+                assemblies.Add(asset.GetType().Assembly);
+                assemblies.Add(runtime.GetType().Assembly);
             }
 
-            if (_fixedSystemsCreated)
-            {
-                _timeFeature.RegisterSystems(new StaticEcsSystemsBuilder<TWorld, StaticEcsFixedUpdateSystems>());
-            }
+            Report.featuresRegistered = _runtimeFeatures.Count;
         }
 
-        private static bool TryGetModule(StaticEcsModuleConfig module, out StaticEcsModuleConfig<TWorld> typedModule)
+        private static void RegisterFeatureAssemblies(
+            World<TWorld>.TypeRegistrar types,
+            HashSet<Assembly> assemblySet)
         {
-            typedModule = module as StaticEcsModuleConfig<TWorld>;
-            return typedModule != null && typedModule.enabled;
+            if (assemblySet.Count == 0)
+            {
+                return;
+            }
+
+            var assemblies = new Assembly[assemblySet.Count];
+            assemblySet.CopyTo(assemblies);
+            Array.Sort(assemblies, static (left, right) =>
+                string.Compare(left.FullName, right.FullName, StringComparison.Ordinal));
+
+            if (assemblies.Length == 1)
+            {
+                types.RegisterAll(assemblies[0]);
+                return;
+            }
+
+            var rest = new Assembly[assemblies.Length - 1];
+            Array.Copy(assemblies, 1, rest, 0, rest.Length);
+            types.RegisterAll(assemblies[0], rest);
+        }
+
+        private async UniTask RegisterFeatureSystemsAsync(
+            IStaticEcsFeature<TWorld> feature,
+            CancellationToken cancellationToken)
+        {
+            if (_updateSystemsCreated &&
+                feature is IStaticEcsSystemsFeature<TWorld, StaticEcsUpdateSystems> updateFeature)
+            {
+                await updateFeature.RegisterSystemsAsync(
+                    new StaticEcsSystemsBuilder<TWorld, StaticEcsUpdateSystems>(),
+                    cancellationToken);
+            }
+
+            if (_fixedSystemsCreated &&
+                feature is IStaticEcsSystemsFeature<TWorld, StaticEcsFixedUpdateSystems> fixedFeature)
+            {
+                await fixedFeature.RegisterSystemsAsync(
+                    new StaticEcsSystemsBuilder<TWorld, StaticEcsFixedUpdateSystems>(),
+                    cancellationToken);
+            }
+
+            if (_lateSystemsCreated &&
+                feature is IStaticEcsSystemsFeature<TWorld, StaticEcsLateUpdateSystems> lateFeature)
+            {
+                await lateFeature.RegisterSystemsAsync(
+                    new StaticEcsSystemsBuilder<TWorld, StaticEcsLateUpdateSystems>(),
+                    cancellationToken);
+            }
+
+            if (_cleanupSystemsCreated &&
+                feature is IStaticEcsSystemsFeature<TWorld, StaticEcsCleanupSystems> cleanupFeature)
+            {
+                await cleanupFeature.RegisterSystemsAsync(
+                    new StaticEcsSystemsBuilder<TWorld, StaticEcsCleanupSystems>(),
+                    cancellationToken);
+            }
         }
 
         private void CreateSystems()
         {
             if (_systemsConfig.update)
             {
-                World<TWorld>.Systems<StaticEcsUpdateSystems>.Create(_systemsConfig.baseSize);
+                World<TWorld>.Systems<StaticEcsUpdateSystems>.Create(
+                    _systemsConfig.baseSize,
+                    StaticEcsSystemGroupIds.Update);
                 _updateSystemsCreated = true;
             }
 
             if (_systemsConfig.fixedUpdate)
             {
-                World<TWorld>.Systems<StaticEcsFixedUpdateSystems>.Create(_systemsConfig.baseSize);
+                World<TWorld>.Systems<StaticEcsFixedUpdateSystems>.Create(
+                    _systemsConfig.baseSize,
+                    StaticEcsSystemGroupIds.FixedUpdate);
                 _fixedSystemsCreated = true;
             }
 
             if (_systemsConfig.lateUpdate)
             {
-                World<TWorld>.Systems<StaticEcsLateUpdateSystems>.Create(_systemsConfig.baseSize);
+                World<TWorld>.Systems<StaticEcsLateUpdateSystems>.Create(
+                    _systemsConfig.baseSize,
+                    StaticEcsSystemGroupIds.LateUpdate);
                 _lateSystemsCreated = true;
             }
 
             if (_systemsConfig.cleanup)
             {
-                World<TWorld>.Systems<StaticEcsCleanupSystems>.Create(_systemsConfig.baseSize);
+                World<TWorld>.Systems<StaticEcsCleanupSystems>.Create(
+                    _systemsConfig.baseSize,
+                    StaticEcsSystemGroupIds.Cleanup);
                 _cleanupSystemsCreated = true;
             }
         }
@@ -286,9 +416,47 @@ namespace UniGame.StaticEcs.Unity
             }
         }
 
-        private static void DestroyWorldIfNeeded()
+        private void DisposeRuntimeFeatures()
         {
-            if (World<TWorld>.Status != WorldStatus.NotCreated)
+            for (var i = _runtimeFeatures.Count - 1; i >= 0; i--)
+            {
+                if (_runtimeFeatures[i] is IDisposable disposable)
+                {
+                    disposable.Dispose();
+                }
+            }
+
+            _runtimeFeatures.Clear();
+        }
+
+        private void ResetReport()
+        {
+            Report.worldCreated = false;
+            Report.typesRegistered = false;
+            Report.worldInitialized = false;
+            Report.systemsInitialized = false;
+            Report.featuresRegistered = 0;
+            Report.updateCount = 0;
+            Report.stage = EcsStartupStage.None;
+            Report.failedStage = EcsStartupStage.None;
+            Report.currentFeature = null;
+            Report.failedFeature = null;
+            Report.message = null;
+        }
+
+        private void DestroyWorldIfNeeded()
+        {
+            if (World<TWorld>.Status == WorldStatus.Created)
+            {
+                // Static ECS 2.2.x registers pool destroy handles before allocating their
+                // instances. Initialize the empty world first so rollback can release a
+                // partially registered Created world safely.
+                World<TWorld>.Initialize(_worldConfig.baseEntitiesCapacity);
+                World<TWorld>.Destroy(withHooks: false);
+                return;
+            }
+
+            if (World<TWorld>.Status == WorldStatus.Initialized)
             {
                 World<TWorld>.Destroy();
             }

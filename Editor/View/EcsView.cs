@@ -19,7 +19,7 @@ namespace UniGame.StaticEcs.Editor.View {
         private bool _injectionWarningLogged;
 
         protected virtual IEnumerable<IStaticEcsViewTab> CreateProjectTabs() {
-            yield return new Tabs.GameModulesTab();
+            yield return new Tabs.GameFeaturesTab();
             yield return new Tabs.BootstrapReportTab();
             yield return new Tabs.FeatureCatalogTab<TWorld>();
         }

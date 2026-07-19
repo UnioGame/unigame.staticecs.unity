@@ -13,21 +13,28 @@ namespace UniGame.StaticEcs.Unity
         public StaticEcsWorldConfig world = StaticEcsWorldConfig.Default;
         public StaticEcsSystemsConfig systems = StaticEcsSystemsConfig.Default;
 
-        public List<StaticEcsModuleConfig> modules = new();
+        public List<StaticEcsFeatureEntry> features = new();
 
-        protected override UniTask<IEcsService> CreateServiceInternalAsync(IContext context)
+        protected override async UniTask<IEcsService> CreateServiceInternalAsync(IContext context)
         {
             var lifeTime = context.LifeTime;
             var service = new EcsService<TWorld>(world, systems);
+            try
+            {
+                await service.InitializeAsync(features, context, lifeTime.Token);
+                context.Publish(service.Report);
 
-            service.Initialize(modules);
-            context.Publish(service.Report);
+                var runner = new EcsRunner<TWorld>(service, systems).AddTo(lifeTime);
+                runner.Start();
 
-            var runner = new EcsRunner<TWorld>(service, systems).AddTo(lifeTime);
-            runner.Start();
-
-            context.Publish(runner);
-            return UniTask.FromResult<IEcsService>(service);
+                context.Publish(runner);
+                return service;
+            }
+            catch
+            {
+                service.Dispose();
+                throw;
+            }
         }
     }
 

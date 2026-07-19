@@ -33,7 +33,11 @@ namespace UniGame.StaticEcs.Editor.View.Tabs {
                 EditorGUILayout.Toggle("Types Registered", report.typesRegistered);
                 EditorGUILayout.Toggle("World Initialized", report.worldInitialized);
                 EditorGUILayout.Toggle("Systems Initialized", report.systemsInitialized);
-                EditorGUILayout.IntField("Modules Registered", report.modulesRegistered);
+                EditorGUILayout.IntField("Features Registered", report.featuresRegistered);
+                EditorGUILayout.EnumPopup("Stage", report.stage);
+                EditorGUILayout.EnumPopup("Failed Stage", report.failedStage);
+                EditorGUILayout.TextField("Current Feature", report.currentFeature ?? string.Empty);
+                EditorGUILayout.TextField("Failed Feature", report.failedFeature ?? string.Empty);
                 EditorGUILayout.IntField("Update Count", report.updateCount);
                 EditorGUILayout.LabelField("Message", report.message ?? string.Empty);
                 EditorGUILayout.LabelField("Success", report.IsSuccess.ToString());

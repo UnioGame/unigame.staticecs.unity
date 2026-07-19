@@ -15,9 +15,6 @@ namespace UniGame.StaticEcs.Unity {
         public PlayerLoopTiming lateUpdateTiming;
         public PlayerLoopTiming cleanupTiming;
 
-        public bool disableEcsTime;
-        public bool disableEcsRng;
-
         public static StaticEcsSystemsConfig Default => new() {
             update = true,
             fixedUpdate = false,
@@ -27,9 +24,7 @@ namespace UniGame.StaticEcs.Unity {
             updateTiming = PlayerLoopTiming.Update,
             fixedUpdateTiming = PlayerLoopTiming.FixedUpdate,
             lateUpdateTiming = PlayerLoopTiming.PostLateUpdate,
-            cleanupTiming = PlayerLoopTiming.LastPostLateUpdate,
-            disableEcsTime = false,
-            disableEcsRng = false
+            cleanupTiming = PlayerLoopTiming.LastPostLateUpdate
         };
     }
 }
