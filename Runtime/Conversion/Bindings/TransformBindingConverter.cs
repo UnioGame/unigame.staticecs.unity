@@ -1,7 +1,7 @@
 using FFS.Libraries.StaticEcs;
 using UnityEngine;
 
-namespace unigame.staticecs.unity {
+namespace UniGame.StaticEcs.Unity {
     public abstract class TransformBindingConverter<TWorld> : EcsMonoConverter<TWorld, TransformBindingComponent>
         where TWorld : struct, IWorldType {
         [SerializeField]

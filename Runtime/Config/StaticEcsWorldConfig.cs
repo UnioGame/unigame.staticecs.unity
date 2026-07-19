@@ -1,7 +1,7 @@
 using System;
 using FFS.Libraries.StaticEcs;
 
-namespace unigame.staticecs.unity {
+namespace UniGame.StaticEcs.Unity {
     [Serializable]
     public struct StaticEcsWorldConfig {
         public uint baseEntitiesCapacity;

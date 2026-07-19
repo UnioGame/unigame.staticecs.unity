@@ -1,6 +1,6 @@
 using UniGame.GameFlow.Runtime;
 
-namespace unigame.staticecs.unity {
+namespace UniGame.StaticEcs.Unity {
     public interface IEcsService : IGameService {
         EcsStartupReport Report { get; }
 

@@ -1,7 +1,7 @@
 using System;
 using Cysharp.Threading.Tasks;
 
-namespace unigame.staticecs.unity {
+namespace UniGame.StaticEcs.Unity {
     [Serializable]
     public struct StaticEcsSystemsConfig {
         public bool update;

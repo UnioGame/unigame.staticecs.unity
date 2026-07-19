@@ -1,7 +1,7 @@
 using FFS.Libraries.StaticEcs;
 using UnityEngine;
 
-namespace unigame.staticecs.unity {
+namespace UniGame.StaticEcs.Unity {
     public abstract class EcsValueConverterAsset<TWorld, TComponent, TValue> : EcsConverterAsset<TWorld>
         where TWorld : struct, IWorldType
         where TComponent : struct, IComponent {

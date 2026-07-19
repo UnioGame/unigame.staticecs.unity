@@ -1,5 +1,5 @@
 using FFS.Libraries.StaticEcs;
 
-namespace unigame.staticecs.unity {
+namespace UniGame.StaticEcs.Unity {
     public struct Main : IWorldType { }
 }

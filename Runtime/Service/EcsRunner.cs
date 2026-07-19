@@ -4,11 +4,14 @@ using Cysharp.Threading.Tasks;
 using FFS.Libraries.StaticEcs;
 using UnityEngine;
 
-namespace unigame.staticecs.unity {
-    public sealed class EcsRunner<TWorld>
+namespace UniGame.StaticEcs.Unity {
+    using UniGame.Runtime.DataFlow;
+
+    public sealed class EcsRunner<TWorld> : IDisposable
         where TWorld : struct, IWorldType {
         private readonly EcsService<TWorld> _service;
         private readonly StaticEcsSystemsConfig _config;
+        private LifeTime _lifeTime = new();
 
         public EcsRunner(EcsService<TWorld> service, StaticEcsSystemsConfig config) {
             _service = service;
@@ -25,13 +28,18 @@ namespace unigame.staticecs.unity {
 
         private async UniTaskVoid RunAsync(Action tick, PlayerLoopTiming timing, CancellationToken token) {
             try {
-                while (Application.isPlaying && _service.IsInitialized) {
+                while (Application.isPlaying && _service.IsInitialized && _lifeTime.IsAlive) {
                     tick();
                     await UniTask.Yield(timing, token);
                 }
             }
             catch (OperationCanceledException) { }
             catch (Exception ex) { Debug.LogException(ex); }
+        }
+
+        public void Dispose()
+        {
+            _lifeTime.Terminate();
         }
     }
 }

@@ -1,6 +1,6 @@
 using UnityEngine;
 
-namespace unigame.staticecs.unity {
+namespace UniGame.StaticEcs.Unity {
     [AddComponentMenu("Static ECS/Entity Provider")]
     public sealed class StaticEcsEntityProvider : EcsEntityProvider<Main> { }
 }

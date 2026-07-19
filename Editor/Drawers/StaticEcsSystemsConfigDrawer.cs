@@ -1,8 +1,9 @@
-using unigame.staticecs.unity;
 using UnityEditor;
 using UnityEngine;
 
 namespace UniGame.StaticEcs.Editor.Drawers {
+    using Unity;
+
     [CustomPropertyDrawer(typeof(StaticEcsSystemsConfig))]
     public sealed class StaticEcsSystemsConfigDrawer : PropertyDrawer {
         private static readonly string[] LoopFields = {

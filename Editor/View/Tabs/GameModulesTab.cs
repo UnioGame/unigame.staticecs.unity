@@ -1,11 +1,11 @@
 using System.Collections.Generic;
 using FFS.Libraries.StaticEcs.Unity.Editor;
-using unigame.staticecs.unity;
 using UnityEditor;
 using UnityEngine;
 
 namespace UniGame.StaticEcs.Editor.View.Tabs {
     using FFS.Libraries.StaticEcs.Unity;
+    using Unity;
 
     public sealed class GameModulesTab : IStaticEcsViewTab {
         private const string TabName = "Game Modules";

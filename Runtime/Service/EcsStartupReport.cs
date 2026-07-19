@@ -1,6 +1,6 @@
 using System;
 
-namespace unigame.staticecs.unity {
+namespace UniGame.StaticEcs.Unity {
     [Serializable]
     public class EcsStartupReport {
         public bool worldCreated;

@@ -1,4 +1,4 @@
-namespace unigame.staticecs.unity {
+namespace UniGame.StaticEcs.Unity {
     public static class EcsServiceRegistry {
         public static IEcsService Active { get; private set; }
 

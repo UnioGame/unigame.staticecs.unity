@@ -3,7 +3,7 @@ using FFS.Libraries.StaticEcs;
 using FFS.Libraries.StaticEcs.Unity;
 using UnityEngine;
 
-namespace unigame.staticecs.unity {
+namespace UniGame.StaticEcs.Unity {
     public abstract class EcsConverterPresetBase : EcsConverterAssetBase { }
 
     public abstract class EcsConverterPreset<TWorld> : EcsConverterAsset<TWorld>

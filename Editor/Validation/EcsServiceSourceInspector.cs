@@ -1,10 +1,10 @@
 using System.Collections.Generic;
 using FFS.Libraries.StaticEcs;
-using unigame.staticecs.unity;
 using UnityEditor;
-using UnityEngine;
 
 namespace UniGame.StaticEcs.Editor.Validation {
+    using Unity;
+
     public abstract class EcsServiceSourceInspector<TWorld> : UnityEditor.Editor
         where TWorld : struct, IWorldType {
         public override void OnInspectorGUI() {

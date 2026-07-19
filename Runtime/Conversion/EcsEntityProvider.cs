@@ -3,7 +3,7 @@ using FFS.Libraries.StaticEcs;
 using FFS.Libraries.StaticEcs.Unity;
 using UnityEngine;
 
-namespace unigame.staticecs.unity {
+namespace UniGame.StaticEcs.Unity {
     public abstract class EcsEntityProvider<TWorld> : StaticEcsEntityProvider<TWorld>
         where TWorld : struct, IWorldType {
         [SerializeReference]

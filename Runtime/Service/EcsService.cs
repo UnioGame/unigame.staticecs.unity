@@ -2,13 +2,15 @@ using System.Collections.Generic;
 using FFS.Libraries.StaticEcs;
 using UniGame.Core.Runtime;
 using UniGame.Runtime.DataFlow;
-using unigame.staticecs;
-using unigame.staticecs.Random;
-using unigame.staticecs.Time;
 
-namespace unigame.staticecs.unity {
+namespace UniGame.StaticEcs.Unity
+{
+    using Random;
+    using Time;
+
     public sealed class EcsService<TWorld> : IEcsService
-        where TWorld : struct, IWorldType {
+        where TWorld : struct, IWorldType
+    {
         private readonly LifeTime _lifeTime = new();
         private readonly StaticEcsWorldConfig _worldConfig;
         private readonly StaticEcsSystemsConfig _systemsConfig;
@@ -19,14 +21,16 @@ namespace unigame.staticecs.unity {
         private bool _lateSystemsCreated;
         private bool _cleanupSystemsCreated;
 
-        public EcsService(
-            StaticEcsWorldConfig worldConfig,
-            StaticEcsSystemsConfig systemsConfig) {
+        public EcsService(StaticEcsWorldConfig worldConfig,
+            StaticEcsSystemsConfig systemsConfig)
+        {
             _worldConfig = worldConfig;
             _systemsConfig = systemsConfig;
             _timeFeature = systemsConfig.disableEcsTime ? null : new EcsTimeFeature<TWorld>();
             _rngFeature = systemsConfig.disableEcsRng ? null : new EcsRngFeature<TWorld>();
+
             Report = new EcsStartupReport();
+
             EcsServiceRegistry.Register(this);
         }
 
@@ -36,25 +40,31 @@ namespace unigame.staticecs.unity {
 
         public bool IsInitialized => World<TWorld>.Status == WorldStatus.Initialized;
 
-        public void Initialize(IReadOnlyList<StaticEcsModuleConfig> modules) {
+        public void Initialize(IReadOnlyList<StaticEcsModuleConfig> modules)
+        {
             DestroyWorldIfNeeded();
 
-            World<TWorld>.Create(_worldConfig.CreateWorldConfig());
+            var worldConfig = _worldConfig.CreateWorldConfig();
+
+            World<TWorld>.Create(worldConfig);
+
             Report.worldCreated = true;
 
-            var registrar = World<TWorld>.Types();
+            var worldTypes = World<TWorld>.Types();
             var moduleCount = 0;
 
-            _timeFeature?.RegisterTypes(registrar);
-            _rngFeature?.RegisterTypes(registrar);
+            _timeFeature?.RegisterTypes(worldTypes);
+            _rngFeature?.RegisterTypes(worldTypes);
 
-            if (modules != null) {
-                for (var i = 0; i < modules.Count; i++) {
-                    if (!TryGetModule(modules[i], out var module)) {
+            if (modules != null)
+            {
+                for (var i = 0; i < modules.Count; i++)
+                {
+                    if (!TryGetModule(modules[i], out var module))
                         continue;
-                    }
 
-                    module.RegisterTypes(registrar);
+
+                    module.RegisterTypes(worldTypes);
                     moduleCount++;
                 }
             }
@@ -69,9 +79,12 @@ namespace unigame.staticecs.unity {
 
             RegisterBuiltinSystems();
 
-            if (modules != null) {
-                for (var i = 0; i < modules.Count; i++) {
-                    if (!TryGetModule(modules[i], out var module)) {
+            if (modules != null)
+            {
+                for (var i = 0; i < modules.Count; i++)
+                {
+                    if (!TryGetModule(modules[i], out var module))
+                    {
                         continue;
                     }
 
@@ -84,9 +97,12 @@ namespace unigame.staticecs.unity {
 
             InitializeSystems();
 
-            if (modules != null) {
-                for (var i = 0; i < modules.Count; i++) {
-                    if (TryGetModule(modules[i], out var module)) {
+            if (modules != null)
+            {
+                for (var i = 0; i < modules.Count; i++)
+                {
+                    if (TryGetModule(modules[i], out var module))
+                    {
                         module.OnWorldInitialized(this);
                     }
                 }
@@ -96,31 +112,37 @@ namespace unigame.staticecs.unity {
         }
 
         public EcsService<TWorld> AddUpdateSystem<TSystem>(TSystem system, short order = 0)
-            where TSystem : ISystem {
+            where TSystem : ISystem
+        {
             World<TWorld>.Systems<StaticEcsUpdateSystems>.Add(system, order);
             return this;
         }
 
         public EcsService<TWorld> AddFixedUpdateSystem<TSystem>(TSystem system, short order = 0)
-            where TSystem : ISystem {
+            where TSystem : ISystem
+        {
             World<TWorld>.Systems<StaticEcsFixedUpdateSystems>.Add(system, order);
             return this;
         }
 
         public EcsService<TWorld> AddLateUpdateSystem<TSystem>(TSystem system, short order = 0)
-            where TSystem : ISystem {
+            where TSystem : ISystem
+        {
             World<TWorld>.Systems<StaticEcsLateUpdateSystems>.Add(system, order);
             return this;
         }
 
         public EcsService<TWorld> AddCleanupSystem<TSystem>(TSystem system, short order = 0)
-            where TSystem : ISystem {
+            where TSystem : ISystem
+        {
             World<TWorld>.Systems<StaticEcsCleanupSystems>.Add(system, order);
             return this;
         }
 
-        public void Update() {
-            if (!_updateSystemsCreated) {
+        public void Update()
+        {
+            if (!_updateSystemsCreated)
+            {
                 return;
             }
 
@@ -129,118 +151,145 @@ namespace unigame.staticecs.unity {
             Report.updateCount++;
         }
 
-        public void FixedUpdate() {
-            if (_fixedSystemsCreated) {
+        public void FixedUpdate()
+        {
+            if (_fixedSystemsCreated)
+            {
                 World<TWorld>.Systems<StaticEcsFixedUpdateSystems>.Update();
             }
         }
 
-        public void LateUpdate() {
-            if (_lateSystemsCreated) {
+        public void LateUpdate()
+        {
+            if (_lateSystemsCreated)
+            {
                 World<TWorld>.Systems<StaticEcsLateUpdateSystems>.Update();
             }
         }
 
-        public void CleanupUpdate() {
-            if (_cleanupSystemsCreated) {
+        public void CleanupUpdate()
+        {
+            if (_cleanupSystemsCreated)
+            {
                 World<TWorld>.Systems<StaticEcsCleanupSystems>.Update();
             }
         }
 
-        public void Dispose() {
+        public void Dispose()
+        {
             DestroySystems();
             DestroyWorldIfNeeded();
             EcsServiceRegistry.Unregister(this);
             _lifeTime.Terminate();
         }
 
-        private void RegisterBuiltinSystems() {
-            if (_timeFeature == null) {
+        private void RegisterBuiltinSystems()
+        {
+            if (_timeFeature == null)
+            {
                 return;
             }
 
-            if (_updateSystemsCreated) {
+            if (_updateSystemsCreated)
+            {
                 _timeFeature.RegisterSystems(new StaticEcsSystemsBuilder<TWorld, StaticEcsUpdateSystems>());
             }
 
-            if (_fixedSystemsCreated) {
+            if (_fixedSystemsCreated)
+            {
                 _timeFeature.RegisterSystems(new StaticEcsSystemsBuilder<TWorld, StaticEcsFixedUpdateSystems>());
             }
         }
 
-        private static bool TryGetModule(
-            StaticEcsModuleConfig module,
-            out StaticEcsModuleConfig<TWorld> typedModule) {
+        private static bool TryGetModule(StaticEcsModuleConfig module, out StaticEcsModuleConfig<TWorld> typedModule)
+        {
             typedModule = module as StaticEcsModuleConfig<TWorld>;
             return typedModule != null && typedModule.enabled;
         }
 
-        private void CreateSystems() {
-            if (_systemsConfig.update) {
+        private void CreateSystems()
+        {
+            if (_systemsConfig.update)
+            {
                 World<TWorld>.Systems<StaticEcsUpdateSystems>.Create(_systemsConfig.baseSize);
                 _updateSystemsCreated = true;
             }
 
-            if (_systemsConfig.fixedUpdate) {
+            if (_systemsConfig.fixedUpdate)
+            {
                 World<TWorld>.Systems<StaticEcsFixedUpdateSystems>.Create(_systemsConfig.baseSize);
                 _fixedSystemsCreated = true;
             }
 
-            if (_systemsConfig.lateUpdate) {
+            if (_systemsConfig.lateUpdate)
+            {
                 World<TWorld>.Systems<StaticEcsLateUpdateSystems>.Create(_systemsConfig.baseSize);
                 _lateSystemsCreated = true;
             }
 
-            if (_systemsConfig.cleanup) {
+            if (_systemsConfig.cleanup)
+            {
                 World<TWorld>.Systems<StaticEcsCleanupSystems>.Create(_systemsConfig.baseSize);
                 _cleanupSystemsCreated = true;
             }
         }
 
-        private void InitializeSystems() {
-            if (_updateSystemsCreated) {
+        private void InitializeSystems()
+        {
+            if (_updateSystemsCreated)
+            {
                 World<TWorld>.Systems<StaticEcsUpdateSystems>.Initialize();
             }
 
-            if (_fixedSystemsCreated) {
+            if (_fixedSystemsCreated)
+            {
                 World<TWorld>.Systems<StaticEcsFixedUpdateSystems>.Initialize();
             }
 
-            if (_lateSystemsCreated) {
+            if (_lateSystemsCreated)
+            {
                 World<TWorld>.Systems<StaticEcsLateUpdateSystems>.Initialize();
             }
 
-            if (_cleanupSystemsCreated) {
+            if (_cleanupSystemsCreated)
+            {
                 World<TWorld>.Systems<StaticEcsCleanupSystems>.Initialize();
             }
 
             Report.systemsInitialized = true;
         }
 
-        private void DestroySystems() {
-            if (_cleanupSystemsCreated) {
+        private void DestroySystems()
+        {
+            if (_cleanupSystemsCreated)
+            {
                 World<TWorld>.Systems<StaticEcsCleanupSystems>.Destroy();
                 _cleanupSystemsCreated = false;
             }
 
-            if (_lateSystemsCreated) {
+            if (_lateSystemsCreated)
+            {
                 World<TWorld>.Systems<StaticEcsLateUpdateSystems>.Destroy();
                 _lateSystemsCreated = false;
             }
 
-            if (_fixedSystemsCreated) {
+            if (_fixedSystemsCreated)
+            {
                 World<TWorld>.Systems<StaticEcsFixedUpdateSystems>.Destroy();
                 _fixedSystemsCreated = false;
             }
 
-            if (_updateSystemsCreated) {
+            if (_updateSystemsCreated)
+            {
                 World<TWorld>.Systems<StaticEcsUpdateSystems>.Destroy();
                 _updateSystemsCreated = false;
             }
         }
 
-        private static void DestroyWorldIfNeeded() {
-            if (World<TWorld>.Status != WorldStatus.NotCreated) {
+        private static void DestroyWorldIfNeeded()
+        {
+            if (World<TWorld>.Status != WorldStatus.NotCreated)
+            {
                 World<TWorld>.Destroy();
             }
         }

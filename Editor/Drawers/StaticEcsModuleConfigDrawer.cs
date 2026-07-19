@@ -1,11 +1,15 @@
-using unigame.staticecs.unity;
 using UnityEditor;
 using UnityEngine;
 
-namespace UniGame.StaticEcs.Editor.Drawers {
+namespace UniGame.StaticEcs.Editor.Drawers
+{
+    using Unity;
+
     [CustomPropertyDrawer(typeof(StaticEcsModuleConfig), true)]
-    public sealed class StaticEcsModuleConfigDrawer : PropertyDrawer {
-        public override void OnGUI(Rect position, SerializedProperty property, GUIContent label) {
+    public sealed class StaticEcsModuleConfigDrawer : PropertyDrawer
+    {
+        public override void OnGUI(Rect position, SerializedProperty property, GUIContent label)
+        {
             var module = property.objectReferenceValue as StaticEcsModuleConfig;
             var icon = module != null && module.enabled ? "\u25CF" : "\u25CB";
             var name = module != null && !string.IsNullOrEmpty(module.moduleName)

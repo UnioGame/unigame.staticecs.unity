@@ -1,7 +1,7 @@
 using FFS.Libraries.StaticEcs;
 using UnityEngine;
 
-namespace unigame.staticecs.unity {
+namespace UniGame.StaticEcs.Unity {
     public abstract class EcsConverterAssetBase : ScriptableObject { }
 
     public abstract class EcsConverterAsset<TWorld> : EcsConverterAssetBase, IEcsConverter<TWorld>

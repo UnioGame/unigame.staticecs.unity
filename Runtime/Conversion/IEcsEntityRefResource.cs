@@ -1,6 +1,6 @@
 using FFS.Libraries.StaticEcs;
 
-namespace unigame.staticecs.unity {
+namespace UniGame.StaticEcs.Unity {
     public interface IEcsEntityRefResource : IResource {
         EntityGID Gid { get; set; }
     }

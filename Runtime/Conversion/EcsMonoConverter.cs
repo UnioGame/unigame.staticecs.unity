@@ -1,7 +1,7 @@
 using FFS.Libraries.StaticEcs;
 using UnityEngine;
 
-namespace unigame.staticecs.unity {
+namespace UniGame.StaticEcs.Unity {
     public abstract class EcsMonoConverter<TWorld> : MonoBehaviour, IEcsConverter<TWorld>
         where TWorld : struct, IWorldType {
         [SerializeField]

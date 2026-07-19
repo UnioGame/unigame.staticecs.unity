@@ -1,10 +1,11 @@
 using FFS.Libraries.StaticEcs.Unity;
 using FFS.Libraries.StaticEcs.Unity.Editor;
-using unigame.staticecs.unity;
 using UnityEditor;
 using UnityEngine;
 
 namespace UniGame.StaticEcs.Editor.View.Tabs {
+    using Unity;
+
     public sealed class BootstrapReportTab : IStaticEcsViewTab {
         private const string TabName = "Bootstrap Report";
 
