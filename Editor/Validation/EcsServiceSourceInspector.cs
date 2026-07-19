@@ -8,13 +8,19 @@ namespace UniGame.StaticEcs.Editor.Validation {
     public abstract class EcsServiceSourceInspector<TWorld> : UnityEditor.Editor
         where TWorld : struct, IWorldType {
         public override void OnInspectorGUI() {
-            DrawDefaultInspector();
+
+            base.OnInspectorGUI();
+
             DrawValidation();
         }
 
         private void DrawValidation() {
+
             var source = (StaticEcsServiceSource<TWorld>)target;
+
+
             var modules = source.modules;
+
             if (modules == null || modules.Count == 0) {
                 EditorGUILayout.HelpBox(
                     "No modules assigned. Static ECS world will be initialized empty.",
