@@ -11,7 +11,7 @@ Unity integration for feature-first Static ECS composition. It provides the defa
 - Explicit active-feature assembly scanning through one `RegisterAll` call.
 - Transactional startup with stage/feature reporting and reverse-order rollback.
 - Stable system groups exposed as `GameSys`, `FixedSys`, `LateSys`, and `CleanupSys` for `Main`.
-- `EcsEntityProvider`, mono converters, converter assets, presets, and transform binding.
+- `EcsEntityProvider`, inline serializable converters, mono converters, converter assets, presets, and transform binding.
 - A concrete service-source inspector with `Synchronize Features`.
 
 ## Usage
@@ -41,6 +41,8 @@ public UniTask RegisterSystemsAsync(
 
 Add feature assets to `StaticEcsServiceSource.features` in dependency/startup order. Use `Synchronize Features` to append missing compatible assets under `Assets/`, remove null and duplicate entries, and retain the order and enabled state of existing entries.
 
+For new entity authoring, add serializable converters to `EcsEntityProvider.serializableConverters`. They support inline configuration and can be composed into `EcsConverterPreset` assets. Mono converters remain supported for existing content and cases where a separate component is useful.
+
 ## Configuration
 
 The feature list order controls manual type registration, async system registration, and startup. System `order` independently controls execution inside a group. Disabled feature assemblies are not scanned.
@@ -50,3 +52,5 @@ The feature list order controls manual type registration, async system registrat
 Native events may first be sent from `StartAsync`, after receivers have been created by system initialization. A receiver created in `ISystem.Init` must be deleted in `Destroy` and must read, suppress, or mark all observed events as read.
 
 For a custom world, derive from `StaticEcsFeatureAsset<TWorld>` and `StaticEcsServiceSource<TWorld>`. Public generic APIs in this package also provide adjacent `Main`-default aliases.
+
+Converter execution order remains Mono components, inline serializable converters, converter assets, then runtime registrations. A preset forwards link-resolution and destroy callbacks to its enabled nested converters. Preset assets cannot persist references to scene objects; scene-bound references should remain inline on the provider or be resolved at runtime.

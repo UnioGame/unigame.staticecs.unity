@@ -8,10 +8,18 @@ namespace UniGame.StaticEcs.Unity {
         private Transform _target;
 
         protected override TransformBindingComponent Build(GameObject host) {
-            return new TransformBindingComponent { Transform = _target != null ? _target : host.transform };
+            return TransformBindingConverterUtility.Build(host, _target);
         }
     }
 
     [AddComponentMenu("Static ECS/Transform Binding Converter")]
     public sealed class TransformBindingConverter : TransformBindingConverter<Main> { }
+
+    internal static class TransformBindingConverterUtility {
+        public static TransformBindingComponent Build(GameObject host, Transform target) {
+            return new TransformBindingComponent {
+                Transform = target != null ? target : host != null ? host.transform : null,
+            };
+        }
+    }
 }

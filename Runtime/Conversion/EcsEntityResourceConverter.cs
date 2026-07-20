@@ -8,6 +8,18 @@ namespace UniGame.StaticEcs.Unity {
         where TWorld : struct, IWorldType
         where TResource : struct, IEcsEntityRefResource {
         public override void Apply(World<TWorld>.Entity entity, GameObject host) {
+            EcsEntityResourceConverterUtility<TWorld, TResource>.Apply(entity);
+        }
+
+        public void OnEntityDestroyed(World<TWorld>.Entity entity, GameObject host) {
+            EcsEntityResourceConverterUtility<TWorld, TResource>.OnEntityDestroyed(entity);
+        }
+    }
+
+    internal static class EcsEntityResourceConverterUtility<TWorld, TResource>
+        where TWorld : struct, IWorldType
+        where TResource : struct, IEcsEntityRefResource {
+        public static void Apply(World<TWorld>.Entity entity) {
             if (!World<TWorld>.HasResource<TResource>()) {
                 World<TWorld>.SetResource(default(TResource));
             }
@@ -16,7 +28,7 @@ namespace UniGame.StaticEcs.Unity {
             resource.Gid = entity.GID;
         }
 
-        public void OnEntityDestroyed(World<TWorld>.Entity entity, GameObject host) {
+        public static void OnEntityDestroyed(World<TWorld>.Entity entity) {
             if (!World<TWorld>.HasResource<TResource>()) {
                 return;
             }
