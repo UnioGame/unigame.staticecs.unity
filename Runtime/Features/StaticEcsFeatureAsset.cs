@@ -42,5 +42,7 @@ namespace UniGame.StaticEcs.Unity
 
         /// <summary>Asset factory used to create the runtime feature.</summary>
         public StaticEcsFeatureAssetBase asset;
+
+        public string Name => asset == null ? "EMPTY" : asset.name;
     }
 }

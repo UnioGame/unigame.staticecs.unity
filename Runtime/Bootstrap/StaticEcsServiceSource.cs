@@ -7,12 +7,19 @@ using UnityEngine;
 
 namespace UniGame.StaticEcs.Unity
 {
+#if ODIN_INSPECTOR
+    using Sirenix.OdinInspector;
+#endif
+
     public abstract class StaticEcsServiceSource<TWorld> : ServiceDataSourceAsset<IEcsService>
         where TWorld : struct, IWorldType
     {
         public StaticEcsWorldConfig world = StaticEcsWorldConfig.Default;
         public StaticEcsSystemsConfig systems = StaticEcsSystemsConfig.Default;
 
+#if ODIN_INSPECTOR
+        [ListDrawerSettings(ListElementLabelName = "@Name")]
+#endif
         public List<StaticEcsFeatureEntry> features = new();
 
         protected override async UniTask<IEcsService> CreateServiceInternalAsync(IContext context)

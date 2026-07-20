@@ -7,6 +7,11 @@ using UnityEngine;
 namespace UniGame.StaticEcs.Editor.Validation
 {
     using Unity;
+#if ODIN_INSPECTOR
+    using EcsServiceSourceEditorBase = Sirenix.OdinInspector.Editor.OdinEditor;
+#else
+    using EcsServiceSourceEditorBase = UnityEditor.Editor;
+#endif
 
     /// <summary>Inspector and synchronization UI for the Main-world ECS source.</summary>
     [CustomEditor(typeof(StaticEcsServiceSource))]
@@ -15,7 +20,7 @@ namespace UniGame.StaticEcs.Editor.Validation
     }
 
     /// <summary>Draws and validates a feature-first ECS service source.</summary>
-    public abstract class EcsServiceSourceInspector<TWorld> : UnityEditor.Editor
+    public abstract class EcsServiceSourceInspector<TWorld> : EcsServiceSourceEditorBase
         where TWorld : struct, IWorldType
     {
         private FeatureSyncResult _lastSync;
