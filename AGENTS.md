@@ -1,5 +1,7 @@
 # AGENTS — unigame.staticecs.unity
 
+Use the repo-local `$build-static-ecs-features` skill for feature assets, converter authoring, presets, lifecycle changes, migrations, and reviews in this package.
+
 ## Layer
 
 - This package owns Unity integration, UniTask lifecycle, feature assets, bootstrap, conversion, the runner, and the default `Main` world.
@@ -20,6 +22,13 @@
 
 - Systems may be structs or classes. Implement only used `ISystem` lifecycle methods.
 - Native-event receivers are created in `Init`, consumed or suppressed, and deleted in `Destroy`. First startup events belong in `StartAsync`, not system registration.
+
+## Converter authoring
+
+- Prefer `EcsComponentSerializableConverter` / `EcsSerializableConverter` in `serializableConverters` over new `EcsMonoConverter` components.
+- Use `EcsMonoConverter` only when independent MonoBehaviour identity/lifecycle, runtime attachment, or unavoidable scene integration is required.
+- Use `EcsConverterPreset` assets for repeated recipes and entities created from configuration. Presets are immutable authoring data and forward link/destroy lifecycle to enabled nested converters.
+- Keep shared build logic in utilities when serializable, Mono, and asset adapters coexist.
 
 ## Documentation
 

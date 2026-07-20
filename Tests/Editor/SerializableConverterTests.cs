@@ -55,6 +55,69 @@ namespace UniGame.StaticEcs.Unity.Tests
         }
 
         [Test]
+        public void Preset_AppliesNestedConvertersInConfiguredOrder()
+        {
+            World<TestSerializableConverterWorld>.Create(WorldConfig.Default());
+            World<TestSerializableConverterWorld>.Types().Component<PresetValueComponent>();
+            World<TestSerializableConverterWorld>.Initialize();
+            var preset = ScriptableObject.CreateInstance<TestConverterPreset>();
+            preset.Add(new PresetValueSerializableConverter { Value = 10 });
+            preset.Add(new PresetValueSerializableConverter { Value = 20 });
+            try
+            {
+                var entity = World<TestSerializableConverterWorld>.NewEntity<Default>();
+
+                preset.Apply(entity, null);
+
+                if (entity.Has<PresetValueComponent>())
+                {
+                    Assert.That(entity.Read<PresetValueComponent>().Value, Is.EqualTo(20));
+                }
+                else
+                {
+                    Assert.Fail("Preset did not add PresetValueComponent.");
+                }
+            }
+            finally
+            {
+                UnityEngine.Object.DestroyImmediate(preset);
+                World<TestSerializableConverterWorld>.Destroy();
+            }
+        }
+
+        [Test]
+        public void Preset_CanBeReusedWithoutSharingEntityState()
+        {
+            World<TestSerializableConverterWorld>.Create(WorldConfig.Default());
+            World<TestSerializableConverterWorld>.Types().Component<PresetValueComponent>();
+            World<TestSerializableConverterWorld>.Initialize();
+            var preset = ScriptableObject.CreateInstance<TestConverterPreset>();
+            preset.Add(new PresetValueSerializableConverter { Value = 10 });
+            try
+            {
+                var first = World<TestSerializableConverterWorld>.NewEntity<Default>();
+                var second = World<TestSerializableConverterWorld>.NewEntity<Default>();
+                preset.Apply(first, null);
+                preset.Apply(second, null);
+
+                if (first.Has<PresetValueComponent>() && second.Has<PresetValueComponent>())
+                {
+                    first.Ref<PresetValueComponent>().Value = 99;
+                    Assert.That(second.Read<PresetValueComponent>().Value, Is.EqualTo(10));
+                }
+                else
+                {
+                    Assert.Fail("Preset did not add PresetValueComponent to both entities.");
+                }
+            }
+            finally
+            {
+                UnityEngine.Object.DestroyImmediate(preset);
+                World<TestSerializableConverterWorld>.Destroy();
+            }
+        }
+
+        [Test]
         public void EnabledContract_UsesSerializedFlag()
         {
             var converter = new LifecycleSerializableConverter();
@@ -78,11 +141,18 @@ namespace UniGame.StaticEcs.Unity.Tests
                 var entity = World<TestSerializableConverterWorld>.NewEntity<Default>();
                 var converter = new TransformBindingSerializableConverter<TestSerializableConverterWorld>();
                 converter.Apply(entity, host);
-                Assert.That(entity.Read<TransformBindingComponent>().Transform, Is.SameAs(host.transform));
+                if (entity.Has<TransformBindingComponent>())
+                {
+                    Assert.That(entity.Read<TransformBindingComponent>().Transform, Is.SameAs(host.transform));
 
-                converter.Target = target.transform;
-                converter.Apply(entity, host);
-                Assert.That(entity.Read<TransformBindingComponent>().Transform, Is.SameAs(target.transform));
+                    converter.Target = target.transform;
+                    converter.Apply(entity, host);
+                    Assert.That(entity.Read<TransformBindingComponent>().Transform, Is.SameAs(target.transform));
+                }
+                else
+                {
+                    Assert.Fail("Converter did not add TransformBindingComponent.");
+                }
             }
             finally
             {
@@ -131,10 +201,14 @@ namespace UniGame.StaticEcs.Unity.Tests
         IEcsLinkResolver<TestSerializableConverterWorld>,
         IEcsConverterDestroyHandler<TestSerializableConverterWorld>
     {
+        public int ApplyCount { get; private set; }
         public int ResolveCount { get; private set; }
         public int DestroyCount { get; private set; }
 
-        public override void Apply(World<TestSerializableConverterWorld>.Entity entity, GameObject host) { }
+        public override void Apply(World<TestSerializableConverterWorld>.Entity entity, GameObject host)
+        {
+            ApplyCount++;
+        }
 
         public void ResolveLinks(World<TestSerializableConverterWorld>.Entity entity, GameObject host)
         {
@@ -152,5 +226,22 @@ namespace UniGame.StaticEcs.Unity.Tests
     internal struct TestEntityResource : IEcsEntityRefResource
     {
         public EntityGID Gid { get; set; }
+    }
+
+    internal struct PresetValueComponent : IComponent
+    {
+        public int Value;
+    }
+
+    [Serializable]
+    internal sealed class PresetValueSerializableConverter :
+        EcsComponentSerializableConverter<TestSerializableConverterWorld, PresetValueComponent>
+    {
+        public int Value { get; set; }
+
+        protected override PresetValueComponent Build(GameObject host)
+        {
+            return new PresetValueComponent { Value = Value };
+        }
     }
 }
