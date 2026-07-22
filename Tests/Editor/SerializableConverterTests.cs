@@ -1,12 +1,12 @@
-using System;
-using System.Reflection;
-using FFS.Libraries.StaticEcs;
-using NUnit.Framework;
-using UnityEditor;
-using UnityEngine;
-
 namespace UniGame.StaticEcs.Unity.Tests
 {
+    using System;
+    using System.Reflection;
+    using FFS.Libraries.StaticEcs;
+    using NUnit.Framework;
+    using UnityEditor;
+    using UnityEngine;
+
     public sealed class SerializableConverterTests
     {
         private const string TempFolder = "Assets/__StaticEcsSerializableConverterTests";
@@ -24,7 +24,7 @@ namespace UniGame.StaticEcs.Unity.Tests
             AssetDatabase.CreateFolder("Assets", "__StaticEcsSerializableConverterTests");
             var source = new GameObject("provider");
             var provider = source.AddComponent<StaticEcsEntityProvider>();
-            provider.serializableConverters.Add(new TransformBindingSerializableConverter());
+            provider.serializableConverters.Add(new TransformSerializableConverter());
 
             PrefabUtility.SaveAsPrefabAsset(source, PrefabPath);
             UnityEngine.Object.DestroyImmediate(source);
@@ -35,7 +35,10 @@ namespace UniGame.StaticEcs.Unity.Tests
             var restored = prefab.GetComponent<StaticEcsEntityProvider>();
 
             Assert.That(restored.serializableConverters, Has.Count.EqualTo(1));
-            Assert.That(restored.serializableConverters[0], Is.TypeOf<TransformBindingSerializableConverter>());
+            Assert.That(
+                restored.serializableConverters[0],
+                Is.TypeOf<TransformSerializableConverter>()
+            );
             Assert.That(restored.serializableConverters[0].IsEnabled, Is.True);
         }
 
@@ -132,26 +135,33 @@ namespace UniGame.StaticEcs.Unity.Tests
         public void TransformBinding_UsesHostAndExplicitTarget()
         {
             World<TestSerializableConverterWorld>.Create(WorldConfig.Default());
-            World<TestSerializableConverterWorld>.Types().Component<TransformBindingComponent>();
+            World<TestSerializableConverterWorld>.Types().Component<TransformComponent>();
             World<TestSerializableConverterWorld>.Initialize();
             var host = new GameObject("host");
             var target = new GameObject("target");
             try
             {
                 var entity = World<TestSerializableConverterWorld>.NewEntity<Default>();
-                var converter = new TransformBindingSerializableConverter<TestSerializableConverterWorld>();
+                var converter =
+                    new TransformSerializableConverter<TestSerializableConverterWorld>();
                 converter.Apply(entity, host);
-                if (entity.Has<TransformBindingComponent>())
+                if (entity.Has<TransformComponent>())
                 {
-                    Assert.That(entity.Read<TransformBindingComponent>().Transform, Is.SameAs(host.transform));
+                    Assert.That(
+                        entity.Read<TransformComponent>().Transform,
+                        Is.SameAs(host.transform)
+                    );
 
                     converter.Target = target.transform;
                     converter.Apply(entity, host);
-                    Assert.That(entity.Read<TransformBindingComponent>().Transform, Is.SameAs(target.transform));
+                    Assert.That(
+                        entity.Read<TransformComponent>().Transform,
+                        Is.SameAs(target.transform)
+                    );
                 }
                 else
                 {
-                    Assert.Fail("Converter did not add TransformBindingComponent.");
+                    Assert.Fail("Converter did not add TransformComponent.");
                 }
             }
             finally
@@ -170,15 +180,23 @@ namespace UniGame.StaticEcs.Unity.Tests
             try
             {
                 var entity = World<TestSerializableConverterWorld>.NewEntity<Default>();
-                var converter = new EcsEntityResourceSerializableConverter<
-                    TestSerializableConverterWorld,
-                    TestEntityResource>();
+                var converter =
+                    new EcsEntityResourceSerializableConverter<
+                        TestSerializableConverterWorld,
+                        TestEntityResource
+                    >();
 
                 converter.Apply(entity, null);
-                Assert.That(World<TestSerializableConverterWorld>.GetResource<TestEntityResource>().Gid, Is.EqualTo(entity.GID));
+                Assert.That(
+                    World<TestSerializableConverterWorld>.GetResource<TestEntityResource>().Gid,
+                    Is.EqualTo(entity.GID)
+                );
 
                 converter.OnEntityDestroyed(entity, null);
-                Assert.That(World<TestSerializableConverterWorld>.GetResource<TestEntityResource>().Gid, Is.EqualTo(default(EntityGID)));
+                Assert.That(
+                    World<TestSerializableConverterWorld>.GetResource<TestEntityResource>().Gid,
+                    Is.EqualTo(default(EntityGID))
+                );
             }
             finally
             {
@@ -196,26 +214,35 @@ namespace UniGame.StaticEcs.Unity.Tests
     }
 
     [Serializable]
-    internal sealed class LifecycleSerializableConverter :
-        EcsSerializableConverter<TestSerializableConverterWorld>,
-        IEcsLinkResolver<TestSerializableConverterWorld>,
-        IEcsConverterDestroyHandler<TestSerializableConverterWorld>
+    internal sealed class LifecycleSerializableConverter
+        : EcsSerializableConverter<TestSerializableConverterWorld>,
+            IEcsLinkResolver<TestSerializableConverterWorld>,
+            IEcsConverterDestroyHandler<TestSerializableConverterWorld>
     {
         public int ApplyCount { get; private set; }
         public int ResolveCount { get; private set; }
         public int DestroyCount { get; private set; }
 
-        public override void Apply(World<TestSerializableConverterWorld>.Entity entity, GameObject host)
+        public override void Apply(
+            World<TestSerializableConverterWorld>.Entity entity,
+            GameObject host
+        )
         {
             ApplyCount++;
         }
 
-        public void ResolveLinks(World<TestSerializableConverterWorld>.Entity entity, GameObject host)
+        public void ResolveLinks(
+            World<TestSerializableConverterWorld>.Entity entity,
+            GameObject host
+        )
         {
             ResolveCount++;
         }
 
-        public void OnEntityDestroyed(World<TestSerializableConverterWorld>.Entity entity, GameObject host)
+        public void OnEntityDestroyed(
+            World<TestSerializableConverterWorld>.Entity entity,
+            GameObject host
+        )
         {
             DestroyCount++;
         }
@@ -234,8 +261,8 @@ namespace UniGame.StaticEcs.Unity.Tests
     }
 
     [Serializable]
-    internal sealed class PresetValueSerializableConverter :
-        EcsComponentSerializableConverter<TestSerializableConverterWorld, PresetValueComponent>
+    internal sealed class PresetValueSerializableConverter
+        : EcsComponentSerializableConverter<TestSerializableConverterWorld, PresetValueComponent>
     {
         public int Value { get; set; }
 
