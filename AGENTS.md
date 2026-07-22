@@ -11,10 +11,11 @@ Use the repo-local `$build-static-ecs-features` skill for feature assets, conver
 ## Feature composition
 
 - ECS service sources store only ordered `StaticEcsFeatureEntry` ScriptableObject references. Do not add module APIs or inline `SerializeReference` features.
-- A feature asset is a factory and never a mutable runtime feature instance.
+- A feature asset is a factory and never a mutable runtime feature instance. Serializable assets use `StaticEcsFeatureAsset<TWorld,TFeature>`; the service clones the asset and runs its pure nested feature.
+- Feature `Destroy()` runs before world destruction. The service destroys the runtime asset clone only after the feature lifecycle and world cleanup complete.
 - Preserve configuration order for type registration, async system registration, and startup. System order is a separate concern.
 - Await feature registration sequentially. Publish the service and start the runner only after all groups initialize and every `StartAsync` completes.
-- On failure, destroy created groups in reverse order, then the world and runtime features. Normal disposal also destroys groups before the world.
+- On failure, destroy created groups in reverse order, then pure runtime features, the world, and runtime asset clones. Normal disposal uses the same order.
 - Scan assemblies only for active feature assets/runtime instances; keep closed generics and resources explicitly registered.
 - `Synchronize Features` searches only under `Assets/`, retains existing order/enabled state, removes null/duplicate entries, and supports Undo.
 

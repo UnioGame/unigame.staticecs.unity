@@ -5,7 +5,7 @@ using FFS.Libraries.StaticEcs;
 namespace UniGame.StaticEcs.Time
 {
     /// <summary>Registers the ECS time resource and Unity player-loop time systems.</summary>
-    public sealed class EcsTimeFeature<TWorld> :
+    public class EcsTimeFeature<TWorld> :
         StaticEcsFeature<TWorld>,
         IStaticEcsSystemsFeature<TWorld, StaticEcsUpdateSystems>,
         IStaticEcsSystemsFeature<TWorld, StaticEcsFixedUpdateSystems>
@@ -14,9 +14,14 @@ namespace UniGame.StaticEcs.Time
         /// <summary>Default order that runs time updates before gameplay systems.</summary>
         public const short DefaultUpdateOrder = short.MinValue;
 
-        private readonly short _updateOrder;
-        private readonly short _fixedOrder;
-        private readonly bool _registerFixed;
+        /// <summary>Order of the variable-step time system.</summary>
+        public short updateOrder = DefaultUpdateOrder;
+
+        /// <summary>Order of the fixed-step time system.</summary>
+        public short fixedOrder = DefaultUpdateOrder;
+
+        /// <summary>Whether the fixed-step time system is registered.</summary>
+        public bool registerFixed = true;
 
         /// <summary>Creates the time feature.</summary>
         public EcsTimeFeature(
@@ -24,9 +29,9 @@ namespace UniGame.StaticEcs.Time
             short fixedOrder = DefaultUpdateOrder,
             bool registerFixed = true)
         {
-            _updateOrder = updateOrder;
-            _fixedOrder = fixedOrder;
-            _registerFixed = registerFixed;
+            this.updateOrder = updateOrder;
+            this.fixedOrder = fixedOrder;
+            this.registerFixed = registerFixed;
         }
 
         /// <inheritdoc />
@@ -43,7 +48,7 @@ namespace UniGame.StaticEcs.Time
             StaticEcsSystemsBuilder<TWorld, StaticEcsUpdateSystems> systems,
             CancellationToken cancellationToken)
         {
-            systems.Add(new EcsTimeUpdateSystem<TWorld>(), _updateOrder);
+            systems.Add(new EcsTimeUpdateSystem<TWorld>(), updateOrder);
             return UniTask.CompletedTask;
         }
 
@@ -52,9 +57,9 @@ namespace UniGame.StaticEcs.Time
             StaticEcsSystemsBuilder<TWorld, StaticEcsFixedUpdateSystems> systems,
             CancellationToken cancellationToken)
         {
-            if (_registerFixed)
+            if (registerFixed)
             {
-                systems.Add(new EcsTimeFixedUpdateSystem<TWorld>(), _fixedOrder);
+                systems.Add(new EcsTimeFixedUpdateSystem<TWorld>(), fixedOrder);
             }
 
             return UniTask.CompletedTask;

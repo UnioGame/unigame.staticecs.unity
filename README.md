@@ -5,7 +5,7 @@ Unity integration for feature-first Static ECS composition. It provides the defa
 ## Capabilities
 
 - Ordered `StaticEcsFeatureEntry` configuration with per-entry enable state.
-- Fresh runtime feature instances created by `StaticEcsFeatureAsset<TWorld>` factories.
+- Fresh runtime asset and pure feature instances created from serializable feature factories.
 - Sequential UniTask registration for Update, Fixed, Late, and Cleanup groups.
 - Post-initialization `StartAsync` before the runner is published or ticked.
 - Explicit active-feature assembly scanning through one `RegisterAll` call.
@@ -16,16 +16,22 @@ Unity integration for feature-first Static ECS composition. It provides the defa
 
 ## Usage
 
-Create an asset factory that returns a new clean feature instance:
+Keep authoring configuration and behavior in a serializable pure feature. The asset is only its Unity wrapper:
 
 ```csharp
-[CreateAssetMenu(menuName = "Static ECS/Features/Inventory")]
-public sealed class InventoryFeatureAsset : StaticEcsFeatureAsset
+[Serializable]
+public sealed class InventoryFeature : InventoryFeature<Main>
 {
-    public override IStaticEcsFeature<Main> CreateFeature(IContext context)
-        => new InventoryFeature();
+    public int initialCapacity = 16;
 }
+
+[CreateAssetMenu(menuName = "Static ECS/Features/Inventory")]
+public sealed class InventoryFeatureAsset : StaticEcsMainFeatureAsset<InventoryFeature> { }
 ```
+
+The service clones the ScriptableObject at runtime, runs the nested pure feature, calls its
+`Destroy()` method before destroying the world, and then releases the runtime asset clone.
+The project asset is never used as mutable runtime state.
 
 Features that own Update systems implement the matching async contract:
 
@@ -51,6 +57,9 @@ The feature list order controls manual type registration, async system registrat
 
 Native events may first be sent from `StartAsync`, after receivers have been created by system initialization. A receiver created in `ISystem.Init` must be deleted in `Destroy` and must read, suppress, or mark all observed events as read.
 
-For a custom world, derive from `StaticEcsFeatureAsset<TWorld>` and `StaticEcsServiceSource<TWorld>`. Public generic APIs in this package also provide adjacent `Main`-default aliases.
+For a custom world, derive from `StaticEcsFeatureAsset<TWorld,TFeature>` and
+`StaticEcsServiceSource<TWorld>`. Keep `StaticEcsFeatureAsset<TWorld>` for context-dependent
+factories that cannot expose a serializable pure feature. Public generic APIs in this package
+also provide adjacent `Main`-default aliases.
 
 Converter execution order remains Mono components, inline serializable converters, converter assets, then runtime registrations. A preset forwards link-resolution and destroy callbacks to its enabled nested converters. Preset assets cannot persist references to scene objects; scene-bound references should remain inline on the provider or be resolved at runtime.

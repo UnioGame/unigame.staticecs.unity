@@ -13,11 +13,16 @@ namespace UniGame.StaticEcs.Unity.Tests
     public sealed class EcsServiceLifecycleTests
     {
         private static readonly List<string> Log = new();
+        private static readonly Dictionary<string, UniTaskCompletionSource> Gates = new();
+        private static readonly List<SerializableFeature> SerializableInstances = new();
 
         [SetUp]
         public void SetUp()
         {
             Log.Clear();
+            Gates.Clear();
+            SerializableInstances.Clear();
+            SerializableFeature.DestroyLog.Clear();
             DestroyWorld();
         }
 
@@ -72,7 +77,8 @@ namespace UniGame.StaticEcs.Unity.Tests
             Assert.CatchAsync<OperationCanceledException>(async () =>
                 await service.InitializeAsync(assets, null, cancellation.Token).AsTask());
 
-            CollectionAssert.Contains(Log, "cancelled:dispose");
+            CollectionAssert.Contains(Log, "cancelled:destroy");
+            CollectionAssert.DoesNotContain(Log, "cancelled:dispose");
             Assert.That(World<TestWorld>.Status, Is.EqualTo(WorldStatus.NotCreated));
             service.Dispose();
             DestroyAssets(assets);
@@ -97,6 +103,98 @@ namespace UniGame.StaticEcs.Unity.Tests
             DestroyAssets(assets);
         }
 
+        [Test]
+        public async Task SerializableFeatureAsset_ClonesFeature_AndDestroysInReverseOrderBeforeWorld()
+        {
+            var first = ScriptableObject.CreateInstance<SerializableFeatureAsset>();
+            var second = ScriptableObject.CreateInstance<SerializableFeatureAsset>();
+            var unityReference = new GameObject("SerializableFeatureReference");
+            first.feature.id = "first";
+            first.feature.value = 10;
+            first.feature.unityReference = unityReference;
+            first.feature.node = new SerializableNode { value = 30 };
+            second.feature.id = "second";
+            second.feature.value = 20;
+            var entries = new List<StaticEcsFeatureEntry>
+            {
+                new() { enabled = true, asset = first },
+                new() { enabled = true, asset = second },
+            };
+            var service = CreateService();
+
+            await service.InitializeAsync(entries, null, CancellationToken.None);
+
+            Assert.That(SerializableInstances, Has.Count.EqualTo(2));
+            Assert.That(SerializableInstances[0], Is.Not.SameAs(first.feature));
+            Assert.That(SerializableInstances[1], Is.Not.SameAs(second.feature));
+            Assert.That(SerializableInstances[0].value, Is.EqualTo(10));
+            Assert.That(SerializableInstances[1].value, Is.EqualTo(20));
+            Assert.That(SerializableInstances[0].unityReference, Is.SameAs(unityReference));
+            Assert.That(SerializableInstances[0].node, Is.Not.SameAs(first.feature.node));
+            Assert.That(SerializableInstances[0].node.value, Is.EqualTo(30));
+            Assert.That(
+                Resources.FindObjectsOfTypeAll<SerializableFeatureAsset>(),
+                Has.Length.EqualTo(4));
+
+            service.Dispose();
+
+            CollectionAssert.AreEqual(
+                new[] { "second:Initialized", "first:Initialized" },
+                SerializableFeature.DestroyLog);
+            Assert.That(first.feature.destroyCount, Is.Zero);
+            Assert.That(second.feature.destroyCount, Is.Zero);
+            Assert.That(
+                Resources.FindObjectsOfTypeAll<SerializableFeatureAsset>(),
+                Has.Length.EqualTo(2));
+            UnityEngine.Object.DestroyImmediate(first);
+            UnityEngine.Object.DestroyImmediate(second);
+            UnityEngine.Object.DestroyImmediate(unityReference);
+        }
+
+        [Test]
+        public async Task SerializableFeatureAsset_CreatesFreshFeatureForEachServiceRun()
+        {
+            var asset = ScriptableObject.CreateInstance<SerializableFeatureAsset>();
+            asset.feature.id = "repeat";
+            var entries = new List<StaticEcsFeatureEntry>
+            {
+                new() { enabled = true, asset = asset },
+            };
+            var firstService = CreateService();
+            await firstService.InitializeAsync(entries, null, CancellationToken.None);
+            var firstRuntime = SerializableInstances[0];
+            firstService.Dispose();
+
+            SerializableInstances.Clear();
+            SerializableFeature.DestroyLog.Clear();
+            var secondService = CreateService();
+            await secondService.InitializeAsync(entries, null, CancellationToken.None);
+            var secondRuntime = SerializableInstances[0];
+            secondService.Dispose();
+
+            Assert.That(secondRuntime, Is.Not.SameAs(firstRuntime));
+            Assert.That(secondRuntime, Is.Not.SameAs(asset.feature));
+            UnityEngine.Object.DestroyImmediate(asset);
+        }
+
+        [Test]
+        public async Task Dispose_UsesDisposableFallbackForFeatureWithDefaultDestroy()
+        {
+            LegacyDisposableFeature.disposeCount = 0;
+            var asset = ScriptableObject.CreateInstance<LegacyDisposableFeatureAsset>();
+            var entries = new List<StaticEcsFeatureEntry>
+            {
+                new() { enabled = true, asset = asset },
+            };
+            var service = CreateService();
+
+            await service.InitializeAsync(entries, null, CancellationToken.None);
+            service.Dispose();
+
+            Assert.That(LegacyDisposableFeature.disposeCount, Is.EqualTo(1));
+            UnityEngine.Object.DestroyImmediate(asset);
+        }
+
         private static EcsService<TestWorld> CreateService()
         {
             var systems = StaticEcsSystemsConfig.Default;
@@ -113,7 +211,14 @@ namespace UniGame.StaticEcs.Unity.Tests
             foreach (var feature in features)
             {
                 var asset = ScriptableObject.CreateInstance<FakeFeatureAsset>();
-                asset.runtime = feature;
+                asset.featureName = feature.Name;
+                asset.addSystems = feature.AddSystems;
+                asset.failStartup = feature.FailStartup;
+                if (feature.Gate != null)
+                {
+                    Gates[feature.Name] = feature.Gate;
+                }
+
                 result.Add(new StaticEcsFeatureEntry { enabled = true, asset = asset });
             }
 
@@ -146,8 +251,15 @@ namespace UniGame.StaticEcs.Unity.Tests
 
         private sealed class FakeFeatureAsset : StaticEcsFeatureAsset<TestWorld>
         {
-            public FakeFeature runtime;
-            public override IStaticEcsFeature<TestWorld> CreateFeature(IContext context) => runtime;
+            public string featureName;
+            public bool addSystems;
+            public bool failStartup;
+
+            public override IStaticEcsFeature<TestWorld> CreateFeature(IContext context)
+            {
+                Gates.TryGetValue(featureName, out var gate);
+                return new FakeFeature(featureName, gate, addSystems, failStartup);
+            }
         }
 
         private sealed class FakeFeature : StaticEcsFeature<TestWorld>,
@@ -167,6 +279,14 @@ namespace UniGame.StaticEcs.Unity.Tests
                 _addSystems = addSystems;
                 _failStartup = failStartup;
             }
+
+            public string Name => _name;
+
+            public UniTaskCompletionSource Gate => _gate;
+
+            public bool AddSystems => _addSystems;
+
+            public bool FailStartup => _failStartup;
 
             public override string FeatureName => _name;
 
@@ -208,7 +328,63 @@ namespace UniGame.StaticEcs.Unity.Tests
                 return UniTask.CompletedTask;
             }
 
+            public override void Destroy() => Log.Add($"{_name}:destroy");
+
             public void Dispose() => Log.Add($"{_name}:dispose");
+        }
+
+        private sealed class SerializableFeatureAsset :
+            StaticEcsFeatureAsset<TestWorld, SerializableFeature> { }
+
+        private sealed class LegacyDisposableFeatureAsset : StaticEcsFeatureAsset<TestWorld>
+        {
+            public override IStaticEcsFeature<TestWorld> CreateFeature(IContext context)
+            {
+                return new LegacyDisposableFeature();
+            }
+        }
+
+        private sealed class LegacyDisposableFeature : StaticEcsFeature<TestWorld>, IDisposable
+        {
+            public static int disposeCount;
+
+            public override void RegisterTypes(World<TestWorld>.TypeRegistrar types) { }
+
+            public void Dispose()
+            {
+                disposeCount++;
+            }
+        }
+
+        [Serializable]
+        private sealed class SerializableFeature : StaticEcsFeature<TestWorld>
+        {
+            public static readonly List<string> DestroyLog = new();
+
+            public string id;
+            public int value;
+            public int destroyCount;
+            public UnityEngine.Object unityReference;
+
+            [SerializeReference]
+            public SerializableNode node;
+
+            public override void RegisterTypes(World<TestWorld>.TypeRegistrar types)
+            {
+                SerializableInstances.Add(this);
+            }
+
+            public override void Destroy()
+            {
+                destroyCount++;
+                DestroyLog.Add($"{id}:{World<TestWorld>.Status}");
+            }
+        }
+
+        [Serializable]
+        private sealed class SerializableNode
+        {
+            public int value;
         }
 
         private struct StructSystem : ISystem

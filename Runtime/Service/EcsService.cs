@@ -16,6 +16,7 @@ namespace UniGame.StaticEcs.Unity
     {
         private readonly LifeTime _lifeTime = new();
         private readonly List<IStaticEcsFeature<TWorld>> _runtimeFeatures = new();
+        private readonly List<StaticEcsFeatureAssetBase> _runtimeFeatureAssets = new();
         private readonly StaticEcsWorldConfig _worldConfig;
         private readonly StaticEcsSystemsConfig _systemsConfig;
         private bool _updateSystemsCreated;
@@ -48,8 +49,16 @@ namespace UniGame.StaticEcs.Unity
             CancellationToken cancellationToken)
         {
             DestroySystems();
+            var previousDestroyException = DestroyRuntimeFeatures();
             DestroyWorldIfNeeded();
-            DisposeRuntimeFeatures();
+            DestroyRuntimeFeatureAssets();
+            if (previousDestroyException != null)
+            {
+                throw new InvalidOperationException(
+                    "Static ECS feature cleanup failed before initialization.",
+                    previousDestroyException);
+            }
+
             ResetReport();
 
             var assemblies = new HashSet<Assembly>();
@@ -128,8 +137,14 @@ namespace UniGame.StaticEcs.Unity
                     $"Static ECS startup failed during {Report.stage} for `{Report.currentFeature ?? "world"}`: " +
                     exception.Message;
                 DestroySystems();
+                var destroyException = DestroyRuntimeFeatures();
                 DestroyWorldIfNeeded();
-                DisposeRuntimeFeatures();
+                DestroyRuntimeFeatureAssets();
+                if (destroyException != null)
+                {
+                    exception.Data["StaticEcsFeatureDestroyException"] = destroyException;
+                }
+
                 throw;
             }
         }
@@ -211,12 +226,20 @@ namespace UniGame.StaticEcs.Unity
         {
             _lifeTime.Terminate();
             DestroySystems();
+            var destroyException = DestroyRuntimeFeatures();
             DestroyWorldIfNeeded();
-            DisposeRuntimeFeatures();
+            DestroyRuntimeFeatureAssets();
             if (_registered)
             {
                 EcsServiceRegistry.Unregister(this);
                 _registered = false;
+            }
+
+            if (destroyException != null)
+            {
+                throw new InvalidOperationException(
+                    "Static ECS feature cleanup failed during service disposal.",
+                    destroyException);
             }
         }
 
@@ -252,14 +275,16 @@ namespace UniGame.StaticEcs.Unity
                 }
 
                 Report.currentFeature = asset.FeatureName;
-                var runtime = asset.CreateRuntimeFeature(context) as IStaticEcsFeature<TWorld>;
-                if (runtime == null)
+                var runtimeInstance = asset.CreateRuntimeFeature(context);
+                if (runtimeInstance.Feature is not IStaticEcsFeature<TWorld> runtime)
                 {
+                    StaticEcsFeatureAssetBase.DestroyRuntimeAsset(runtimeInstance.Asset);
                     throw new InvalidOperationException(
                         $"Feature asset `{asset.name}` did not create an IStaticEcsFeature<{typeof(TWorld).Name}> instance.");
                 }
 
                 _runtimeFeatures.Add(runtime);
+                _runtimeFeatureAssets.Add(runtimeInstance.Asset);
                 assemblies.Add(asset.GetType().Assembly);
                 assemblies.Add(runtime.GetType().Assembly);
             }
@@ -416,17 +441,57 @@ namespace UniGame.StaticEcs.Unity
             }
         }
 
-        private void DisposeRuntimeFeatures()
+        private Exception DestroyRuntimeFeatures()
         {
+            Exception firstException = null;
             for (var i = _runtimeFeatures.Count - 1; i >= 0; i--)
             {
-                if (_runtimeFeatures[i] is IDisposable disposable)
+                try
                 {
-                    disposable.Dispose();
+                    var feature = _runtimeFeatures[i];
+                    if (feature is IStaticEcsDestroyFeature<TWorld> destroyFeature &&
+                        (feature is not IDisposable || HasCustomDestroy(feature)))
+                    {
+                        destroyFeature.Destroy();
+                    }
+                    else if (feature is IDisposable disposable)
+                    {
+                        disposable.Dispose();
+                    }
+                    else if (feature is IStaticEcsDestroyFeature<TWorld> defaultDestroyFeature)
+                    {
+                        defaultDestroyFeature.Destroy();
+                    }
+                }
+                catch (Exception exception)
+                {
+                    firstException ??= exception;
                 }
             }
 
             _runtimeFeatures.Clear();
+            return firstException;
+        }
+
+        private static bool HasCustomDestroy(IStaticEcsFeature<TWorld> feature)
+        {
+            var method = feature.GetType().GetMethod(
+                nameof(IStaticEcsDestroyFeature<TWorld>.Destroy),
+                BindingFlags.Instance | BindingFlags.Public,
+                null,
+                Type.EmptyTypes,
+                null);
+            return method?.DeclaringType != typeof(StaticEcsFeature<TWorld>);
+        }
+
+        private void DestroyRuntimeFeatureAssets()
+        {
+            for (var i = _runtimeFeatureAssets.Count - 1; i >= 0; i--)
+            {
+                StaticEcsFeatureAssetBase.DestroyRuntimeAsset(_runtimeFeatureAssets[i]);
+            }
+
+            _runtimeFeatureAssets.Clear();
         }
 
         private void ResetReport()
