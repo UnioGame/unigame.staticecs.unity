@@ -11,6 +11,16 @@ namespace UniGame.StaticEcs.Unity
     using Sirenix.OdinInspector;
 #endif
 
+    /// <summary>Controls when a configured ECS feature participates in startup.</summary>
+    public enum StaticEcsFeatureActivation
+    {
+        /// <summary>The feature follows its enabled flag in every build.</summary>
+        Always,
+
+        /// <summary>The feature participates only when GAME_DEBUG is defined.</summary>
+        GameDebug,
+    }
+
     /// <summary>Non-generic base for feature assets stored by an ECS service source.</summary>
     public abstract class StaticEcsFeatureAssetBase : ScriptableObject
     {
@@ -129,11 +139,37 @@ namespace UniGame.StaticEcs.Unity
         /// <summary>Controls whether this feature participates in startup.</summary>
         public bool enabled = true;
 
+        /// <summary>Controls the build configuration in which the feature can participate.</summary>
+        public StaticEcsFeatureActivation activation;
+
         /// <summary>Asset factory used to create the runtime feature.</summary>
 #if ODIN_INSPECTOR
         [InlineButton(nameof(OpenFeatureScript), SdfIconType.Folder2Open)]
 #endif
         public StaticEcsFeatureAssetBase asset;
+
+        /// <summary>Returns whether the feature is enabled for the current build.</summary>
+        public bool IsEnabled
+        {
+            get
+            {
+                if (!enabled)
+                {
+                    return false;
+                }
+
+                if (activation != StaticEcsFeatureActivation.GameDebug)
+                {
+                    return true;
+                }
+
+#if GAME_DEBUG
+                return true;
+#else
+                return false;
+#endif
+            }
+        }
 
         /// <summary>Opens the configured feature implementation in the script editor.</summary>
         public void OpenFeatureScript()

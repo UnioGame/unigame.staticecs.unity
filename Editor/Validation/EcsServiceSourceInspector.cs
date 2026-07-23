@@ -85,7 +85,7 @@ namespace UniGame.StaticEcs.Editor.Validation
 
                 hasDuplicates |= !seen.Add(entry.asset);
                 hasWrongWorld |= entry.asset.WorldType != typeof(TWorld);
-                hasAnyEnabled |= entry.enabled;
+                hasAnyEnabled |= entry.IsEnabled;
             }
 
             if (hasNull || hasDuplicates)

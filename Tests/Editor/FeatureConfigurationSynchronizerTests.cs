@@ -14,6 +14,28 @@ namespace UniGame.StaticEcs.Unity.Tests
         private const string TestFolder = "Assets/__StaticEcsFeatureSyncTests";
 
         [Test]
+        public void FeatureEntry_UsesConfiguredBuildActivation()
+        {
+            var always = new StaticEcsFeatureEntry
+            {
+                enabled = true,
+                activation = StaticEcsFeatureActivation.Always,
+            };
+            var gameDebug = new StaticEcsFeatureEntry
+            {
+                enabled = true,
+                activation = StaticEcsFeatureActivation.GameDebug,
+            };
+
+            Assert.That(always.IsEnabled, Is.True);
+#if GAME_DEBUG
+            Assert.That(gameDebug.IsEnabled, Is.True);
+#else
+            Assert.That(gameDebug.IsEnabled, Is.False);
+#endif
+        }
+
+        [Test]
         public void Synchronize_RemovesNullAndDuplicates_PreservingFirstEntryStateAndOrder()
         {
             var first = ScriptableObject.CreateInstance<SyncFeatureAsset>();
@@ -21,7 +43,12 @@ namespace UniGame.StaticEcs.Unity.Tests
             var wrongWorld = ScriptableObject.CreateInstance<WrongWorldFeatureAsset>();
             var entries = new List<StaticEcsFeatureEntry>
             {
-                new() { enabled = false, asset = first },
+                new()
+                {
+                    enabled = false,
+                    activation = StaticEcsFeatureActivation.GameDebug,
+                    asset = first,
+                },
                 null,
                 new() { enabled = true, asset = first },
             };
@@ -35,6 +62,7 @@ namespace UniGame.StaticEcs.Unity.Tests
             Assert.That(result.wrongWorldSkipped, Is.EqualTo(1));
             Assert.That(entries[0].asset, Is.SameAs(first));
             Assert.That(entries[0].enabled, Is.False);
+            Assert.That(entries[0].activation, Is.EqualTo(StaticEcsFeatureActivation.GameDebug));
             Assert.That(entries[1].asset, Is.SameAs(second));
             Object.DestroyImmediate(first);
             Object.DestroyImmediate(second);

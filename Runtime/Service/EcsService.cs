@@ -257,7 +257,7 @@ namespace UniGame.StaticEcs.Unity
             for (var i = 0; i < entries.Count; i++)
             {
                 var entry = entries[i];
-                if (entry == null || !entry.enabled || entry.asset == null)
+                if (entry == null || !entry.IsEnabled || entry.asset == null)
                 {
                     continue;
                 }
