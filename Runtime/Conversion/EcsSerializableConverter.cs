@@ -4,7 +4,10 @@ using UnityEngine;
 
 namespace UniGame.StaticEcs.Unity
 {
-    using UniBuild.Editor.Utils;
+#if UNITY_EDITOR
+    using UniModules.Editor;
+#endif
+
 #if ODIN_INSPECTOR
     using Sirenix.OdinInspector;
 #endif
