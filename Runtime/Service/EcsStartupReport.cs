@@ -7,22 +7,22 @@ namespace UniGame.StaticEcs.Unity
     {
         /// <summary>Startup has not begun.</summary>
         None,
-        /// <summary>Runtime feature instances are being created.</summary>
+        /// <summary>Enabled feature assets are being cloned.</summary>
         CreateFeatures,
         /// <summary>The Static ECS world is being created.</summary>
         CreateWorld,
-        /// <summary>ECS types and resources are being registered.</summary>
+        /// <summary>Bootstrap-owned resources are being published.</summary>
+        PublishBootstrapResources,
+        /// <summary>ECS types are being registered from active feature assemblies.</summary>
         RegisterTypes,
+        /// <summary>Features are publishing resources and adding systems.</summary>
+        InitializeFeatures,
         /// <summary>The Static ECS world is being initialized.</summary>
         InitializeWorld,
         /// <summary>System groups are being created.</summary>
         CreateSystems,
-        /// <summary>Features are registering systems.</summary>
-        RegisterSystems,
         /// <summary>System groups are being initialized.</summary>
         InitializeSystems,
-        /// <summary>Features are running post-system startup.</summary>
-        StartFeatures,
         /// <summary>Startup completed successfully.</summary>
         Completed,
     }
@@ -35,14 +35,24 @@ namespace UniGame.StaticEcs.Unity
         public bool worldCreated;
         /// <summary>Whether type registration completed.</summary>
         public bool typesRegistered;
+        /// <summary>Whether bootstrap-owned resources were published.</summary>
+        public bool bootstrapResourcesInstalled;
+        /// <summary>Whether every enabled feature initialized.</summary>
+        public bool featuresInitialized;
         /// <summary>Whether the world was initialized.</summary>
         public bool worldInitialized;
         /// <summary>Whether every enabled systems group was initialized.</summary>
         public bool systemsInitialized;
         /// <summary>Number of enabled runtime features.</summary>
-        public int featuresRegistered;
+        public int featureCount;
         /// <summary>Number of update ticks executed.</summary>
         public int updateCount;
+        /// <summary>Whether a runner loop stopped because of an unhandled exception.</summary>
+        public bool runtimeFaulted;
+        /// <summary>Runner loop that raised the runtime fault.</summary>
+        public string runtimeFaultGroup;
+        /// <summary>Human-readable runtime fault details.</summary>
+        public string runtimeFaultMessage;
         /// <summary>Current or last startup stage.</summary>
         public EcsStartupStage stage;
         /// <summary>Stage that failed, if any.</summary>
@@ -58,8 +68,11 @@ namespace UniGame.StaticEcs.Unity
         public bool IsSuccess =>
             stage == EcsStartupStage.Completed &&
             worldCreated &&
+            bootstrapResourcesInstalled &&
+            featuresInitialized &&
             typesRegistered &&
             worldInitialized &&
-            systemsInitialized;
+            systemsInitialized &&
+            !runtimeFaulted;
     }
 }

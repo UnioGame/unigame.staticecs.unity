@@ -11,15 +11,20 @@ namespace UniGame.StaticEcs.Unity
     using Sirenix.OdinInspector;
 #endif
 
+    /// <summary>Creates and runs a configured Static ECS service for one world type.</summary>
     public abstract class StaticEcsServiceSource<TWorld> : ServiceDataSourceAsset<IEcsService>
         where TWorld : struct, IWorldType
     {
+        /// <summary>World capacity and initialization configuration.</summary>
         public StaticEcsWorldConfig world = StaticEcsWorldConfig.Default;
+
+        /// <summary>System-group and player-loop configuration.</summary>
         public StaticEcsSystemsConfig systems = StaticEcsSystemsConfig.Default;
 
 #if ODIN_INSPECTOR
         [ListDrawerSettings(ListElementLabelName = "@Name")]
 #endif
+        /// <summary>Ordered feature assets used to compose the world.</summary>
         public List<StaticEcsFeatureEntry> features = new();
 
         protected override async UniTask<IEcsService> CreateServiceInternalAsync(IContext context)
@@ -44,7 +49,4 @@ namespace UniGame.StaticEcs.Unity
             }
         }
     }
-
-    [CreateAssetMenu(menuName = "Static ECS/Service Source", fileName = nameof(StaticEcsServiceSource))]
-    public sealed class StaticEcsServiceSource : StaticEcsServiceSource<Main> { }
 }

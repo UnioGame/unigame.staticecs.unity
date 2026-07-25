@@ -1,12 +1,13 @@
 namespace UniGame.StaticEcs.Unity
 {
-    /// <summary>Main-world feature asset factory.</summary>
+    /// <summary>Standalone Main-world feature asset.</summary>
     public abstract class StaticEcsFeatureAsset : StaticEcsFeatureAsset<Main>
     {
     }
 
-    /// <summary>Main-world asset that exposes a serializable pure feature.</summary>
-    public abstract class StaticEcsMainFeatureAsset<TFeature> : StaticEcsFeatureAsset<Main, TFeature>
+    /// <summary>Main-world asset adapter for a serialized programmatic feature.</summary>
+    public abstract class StaticEcsMainFeatureAsset<TFeature> :
+        StaticEcsFeatureAsset<Main, TFeature>
         where TFeature : class, IStaticEcsFeature<Main>, new()
     {
     }

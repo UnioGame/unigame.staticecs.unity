@@ -28,8 +28,7 @@ namespace UniGame.StaticEcs.Unity
 
         /// <inheritdoc />
         public abstract void Apply(World<TWorld>.Entity entity, GameObject host);
-
-
+        /// <summary>Opens the converter implementation in the configured script editor.</summary>
         public void OpenScript()
         {
 #if UNITY_EDITOR
@@ -42,7 +41,6 @@ namespace UniGame.StaticEcs.Unity
             return _isEnabled ?
                 new Color(0.2f, 1f, 0.2f) :
                 new Color(1, 0.6f, 0.4f);
-            return Color.green;
         }
     }
 

@@ -1,65 +1,171 @@
 # UniGame Static ECS Unity
 
-Unity integration for feature-first Static ECS composition. It provides the default `Main` world, async feature lifecycle, ScriptableObject feature factories, the service runner, conversion helpers, and editor tooling.
-
 ## Capabilities
 
-- Ordered `StaticEcsFeatureEntry` configuration with per-entry enable state.
-- Fresh runtime asset and pure feature instances created from serializable feature factories.
-- Sequential UniTask registration for Update, Fixed, Late, and Cleanup groups.
-- Post-initialization `StartAsync` before the runner is published or ticked.
-- Explicit active-feature assembly scanning through one `RegisterAll` call.
-- Transactional startup with stage/feature reporting and reverse-order rollback.
-- Stable system groups exposed as `GameSys`, `FixedSys`, `LateSys`, and `CleanupSys` for `Main`.
-- `EcsEntityProvider`, inline serializable converters, mono converters, converter assets, presets, and transform binding.
-- A concrete service-source inspector with `Synchronize Features`.
+This package owns the default `Main` world, feature assets, Unity authoring,
+converters, presets, player-loop runners, automatic type discovery, asynchronous
+resource access, rollback, and repeated initialization.
+
+Startup runs in this order:
+
+1. terminate the previous world lifetime, then destroy its systems, world, and runtime assets;
+2. clone enabled feature assets and collect their asset and programmatic feature
+   inheritance assemblies;
+3. create the world and publish `EcsWorldLifeTimeResource`, `EcsContextResource`,
+   `StaticEcsWorldConfig`, and system configuration;
+4. create enabled system groups;
+5. call `RegisterAll` for the collected enabled feature assemblies;
+6. run assembly registrars for closed generic ECS types;
+7. initialize features using the configured parallel or sequential mode;
+8. initialize the world and system groups;
+9. start the runner.
+
+Any exception or cancellation records the feature and stage and rolls the
+partially created world back.
 
 ## Usage
 
-Keep authoring configuration and behavior in a serializable pure feature. The asset is only its Unity wrapper:
+Use a serialized programmatic feature for normal gameplay composition:
 
 ```csharp
 [Serializable]
-public sealed class InventoryFeature : InventoryFeature<Main>
+public sealed class DemoFeature : StaticEcsFeature<Main>
 {
-    public int initialCapacity = 16;
+    public override async UniTask InitializeAsync(ILifeTime lifeTime)
+    {
+        World<Main>.Resource<MatchRegistry> matches = default;
+        await matches.GetAsync(lifeTime);
+
+        var configuration = new DemoConfiguration();
+
+        World<Main>.SetResource(configuration);
+        lifeTime.AddDispose(CreateSubscription());
+        World<Main>.Systems<StaticEcsUpdateSystems>.Add(
+            new DemoSystem(),
+            100);
+    }
 }
 
-[CreateAssetMenu(menuName = "Static ECS/Features/Inventory")]
-public sealed class InventoryFeatureAsset : StaticEcsMainFeatureAsset<InventoryFeature> { }
+public sealed class DemoFeatureAsset :
+    StaticEcsMainFeatureAsset<DemoFeature>
+{
+}
 ```
 
-The service clones the ScriptableObject at runtime, runs the nested pure feature, calls its
-`Destroy()` method before destroying the world, and then releases the runtime asset clone.
-The project asset is never used as mutable runtime state.
-
-Features that own Update systems implement the matching async contract:
+A feature implemented entirely by a ScriptableObject can use the standalone
+base:
 
 ```csharp
-public UniTask RegisterSystemsAsync(
-    StaticEcsSystemsBuilder<Main, StaticEcsUpdateSystems> systems,
-    CancellationToken cancellationToken)
+public sealed class SceneFeatureAsset : StaticEcsFeatureAsset
 {
-    systems.Add(new InventorySystem(), order: 0);
-    return UniTask.CompletedTask;
+    protected override UniTask OnInitializeAsync(ILifeTime lifeTime)
+    {
+        var configuration = new SceneConfiguration();
+        World<Main>.SetResource(configuration);
+        return UniTask.CompletedTask;
+    }
 }
 ```
 
-Add feature assets to `StaticEcsServiceSource.features` in dependency/startup order. Use `Synchronize Features` to append missing compatible assets under `Assets/`, remove null and duplicate entries, and retain the order and enabled state of existing entries.
+`EcsService` automatically scans concrete value types in enabled feature
+assemblies:
 
-For new entity authoring, add serializable converters to `EcsEntityProvider.serializableConverters`. They support inline configuration and can be composed into `EcsConverterPreset` assets. Mono converters remain supported for existing content and cases where a separate component is useful.
+| Marker | Automatic registration |
+|---|---|
+| `IComponent` | component |
+| `ITag` | tag |
+| `IEvent` | event |
+| `ILinkType` | `Link<T>` |
+| `ILinksType` | `Links<T>` |
+| `IMultiComponent` | `Multi<T>` |
+| `IEntityType` | entity type |
+
+It does not register open generic definitions, required closed generic
+constructions, `IResource`, systems, groups, feature assets, converters,
+abstract types, unmarked classes, or assemblies belonging only to disabled
+features.
+
+For `StaticEcsFeatureAsset<TWorld, TFeature>`, discovery includes the assembly
+of the asset plus the assemblies that define `TFeature` and its programmatic
+feature base classes. A feature variant can therefore inherit shared markers
+from another runtime asmdef without adding a second feature asset or manually
+registering ordinary components.
+
+Declare closed generic types once in their owning assembly:
+
+```csharp
+[assembly: StaticEcsTypeRegistrar(typeof(DemoClosedTypes))]
+
+internal sealed class DemoClosedTypes : IStaticEcsTypeRegistrar<Main>
+{
+    public void Register(World<Main>.TypeRegistrar types)
+    {
+        types.Event<GameActionEvent<HealAction>>();
+    }
+}
+```
+
+Access the application context in one line during initialization:
+
+```csharp
+var context = StaticEcsContext.Get();
+var customWorldContext = StaticEcsContext.Get<TWorld>();
+```
+
+Runtime code should read the typed ECS Resources that initialization publishes,
+not query the context on every tick.
+
+Feature initialization receives the lifetime owned by the current world directly.
+Pass the same instance to nested programmatic features and use
+`lifeTime.Token` only for asynchronous operations that support cancellation.
+
+Code outside feature initialization can access the lifetime through its handle:
+
+```csharp
+var lifeTime = World<Main>.Handle.GetLifeTime();
+var customWorldLifeTime = World<TWorld>.Handle.GetLifeTime();
+```
+
+The same instance is available through the resource API:
+
+```csharp
+var lifeTime = World<TWorld>
+    .GetResource<EcsWorldLifeTimeResource>()
+    .LifeTime;
+```
+
+Use the world lifetime for initialization-owned subscriptions, background
+operations, and `IDisposable` objects. Systems continue to own their runtime
+state through `Init` and `Destroy`.
 
 ## Configuration
 
-The feature list order controls manual type registration, async system registration, and startup. System `order` independently controls execution inside a group. Disabled feature assemblies are not scanned.
+`StaticEcsWorldConfig.featureInitializationMode` defaults to
+`StaticEcsFeatureInitializationMode.Parallel`. Parallel mode overlaps asynchronous
+feature pipelines with `UniTask.WhenAll`; it does not move feature code to worker
+threads. This allows a feature to wait for a resource published by a later configured
+feature. Completion order is not deterministic, so resource overrides or other
+order-sensitive composition must select
+`StaticEcsFeatureInitializationMode.Sequential`.
 
-`EcsTimeFeatureAsset` and `EcsRngFeatureAsset` are ordinary entries rather than hidden service switches. A feature must validate required resources or preceding features and fail with a clear message.
+`StaticEcsWorldConfig.editorDependencyTimeoutMs` defaults to 5 seconds.
+`playerDependencyTimeoutMs` defaults to 10 seconds. Lifetime cancellation remains
+distinct from resource timeout. A timeout reports the exact resource requested
+at the call site.
 
-Native events may first be sent from `StartAsync`, after receivers have been created by system initialization. A receiver created in `ISystem.Init` must be deleted in `Destroy` and must read, suppress, or mark all observed events as read.
+For optional asynchronous access:
 
-For a custom world, derive from `StaticEcsFeatureAsset<TWorld,TFeature>` and
-`StaticEcsServiceSource<TWorld>`. Keep `StaticEcsFeatureAsset<TWorld>` for context-dependent
-factories that cannot expose a serializable pure feature. Public generic APIs in this package
-also provide adjacent `Main`-default aliases.
+```csharp
+World<TWorld>.Resource<MatchRegistry> matches = default;
+var registry = await matches.GetAsync(lifeTime);
+```
 
-Converter execution order remains Mono components, inline serializable converters, converter assets, then runtime registrations. A preset forwards link-resolution and destroy callbacks to its enabled nested converters. Preset assets cannot persist references to scene objects; scene-bound references should remain inline on the provider or be resolved at runtime.
+The polling callback uses UniTask's state overload and a static lambda. Resource
+structs are returned as copies; resource classes are returned as references.
+
+`EcsContextResource` does not own or dispose `IContext`. Repeated initialization
+terminates the old world lifetime before destroying systems, the world, and
+runtime feature clones. Resource removal does not call `IDisposable.Dispose`;
+register initialization-owned disposables with the world lifetime instead.
+Disabled converters are skipped during apply, link resolution, and destroy
+callbacks.

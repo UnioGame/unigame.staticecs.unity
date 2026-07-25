@@ -1,4 +1,6 @@
 using System.Collections.Generic;
+using System.Threading;
+using Cysharp.Threading.Tasks;
 using FFS.Libraries.StaticEcs;
 using NUnit.Framework;
 using UniGame.Core.Runtime;
@@ -14,25 +16,20 @@ namespace UniGame.StaticEcs.Unity.Tests
         private const string TestFolder = "Assets/__StaticEcsFeatureSyncTests";
 
         [Test]
-        public void FeatureEntry_UsesConfiguredBuildActivation()
+        public void FeatureEntry_UsesEnabledFlag()
         {
-            var always = new StaticEcsFeatureEntry
+            var enabled = new StaticEcsFeatureEntry
             {
                 enabled = true,
-                activation = StaticEcsFeatureActivation.Always,
             };
-            var gameDebug = new StaticEcsFeatureEntry
+            var disabled = new StaticEcsFeatureEntry
             {
-                enabled = true,
-                activation = StaticEcsFeatureActivation.GameDebug,
+                enabled = false,
             };
 
-            Assert.That(always.IsEnabled, Is.True);
-#if GAME_DEBUG
-            Assert.That(gameDebug.IsEnabled, Is.True);
-#else
-            Assert.That(gameDebug.IsEnabled, Is.False);
-#endif
+            Assert.That(enabled.IsEnabled, Is.True);
+            Assert.That(disabled.IsEnabled, Is.False);
+            Assert.That(new DerivedFeatureEntry().IsEnabled, Is.True);
         }
 
         [Test]
@@ -46,7 +43,6 @@ namespace UniGame.StaticEcs.Unity.Tests
                 new()
                 {
                     enabled = false,
-                    activation = StaticEcsFeatureActivation.GameDebug,
                     asset = first,
                 },
                 null,
@@ -62,7 +58,6 @@ namespace UniGame.StaticEcs.Unity.Tests
             Assert.That(result.wrongWorldSkipped, Is.EqualTo(1));
             Assert.That(entries[0].asset, Is.SameAs(first));
             Assert.That(entries[0].enabled, Is.False);
-            Assert.That(entries[0].activation, Is.EqualTo(StaticEcsFeatureActivation.GameDebug));
             Assert.That(entries[1].asset, Is.SameAs(second));
             Object.DestroyImmediate(first);
             Object.DestroyImmediate(second);
@@ -101,14 +96,22 @@ namespace UniGame.StaticEcs.Unity.Tests
         private struct SyncWorld : IWorldType { }
         private struct WrongWorld : IWorldType { }
 
+        private sealed class DerivedFeatureEntry : StaticEcsFeatureEntry { }
+
         private sealed class SyncFeatureAsset : StaticEcsFeatureAsset<SyncWorld>
         {
-            public override IStaticEcsFeature<SyncWorld> CreateFeature(IContext context) => null;
+            protected override UniTask OnInitializeAsync(ILifeTime lifeTime)
+            {
+                return UniTask.CompletedTask;
+            }
         }
 
         private sealed class WrongWorldFeatureAsset : StaticEcsFeatureAsset<WrongWorld>
         {
-            public override IStaticEcsFeature<WrongWorld> CreateFeature(IContext context) => null;
+            protected override UniTask OnInitializeAsync(ILifeTime lifeTime)
+            {
+                return UniTask.CompletedTask;
+            }
         }
     }
 }

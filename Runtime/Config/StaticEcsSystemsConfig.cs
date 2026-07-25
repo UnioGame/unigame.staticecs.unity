@@ -1,9 +1,11 @@
 using System;
 using Cysharp.Threading.Tasks;
+using FFS.Libraries.StaticEcs;
 
 namespace UniGame.StaticEcs.Unity {
+    /// <summary>Configures enabled Static ECS system groups and their Unity loop timings.</summary>
     [Serializable]
-    public struct StaticEcsSystemsConfig {
+    public struct StaticEcsSystemsConfig : IResource {
         public bool update;
         public bool fixedUpdate;
         public bool lateUpdate;
@@ -14,6 +16,7 @@ namespace UniGame.StaticEcs.Unity {
         public PlayerLoopTiming fixedUpdateTiming;
         public PlayerLoopTiming lateUpdateTiming;
         public PlayerLoopTiming cleanupTiming;
+        public PlayerLoopTiming tickTiming;
 
         public static StaticEcsSystemsConfig Default => new() {
             update = true,
@@ -24,7 +27,8 @@ namespace UniGame.StaticEcs.Unity {
             updateTiming = PlayerLoopTiming.Update,
             fixedUpdateTiming = PlayerLoopTiming.FixedUpdate,
             lateUpdateTiming = PlayerLoopTiming.PostLateUpdate,
-            cleanupTiming = PlayerLoopTiming.LastPostLateUpdate
+            cleanupTiming = PlayerLoopTiming.LastPostLateUpdate,
+            tickTiming = PlayerLoopTiming.LastPostLateUpdate
         };
     }
 }

@@ -87,7 +87,12 @@ namespace UniGame.StaticEcs.Unity {
             if (!entityGid.TryUnpack<TWorld>(out var entity)) return;
 
             for (var i = 0; i < _runtime.Count; i++) {
-                if (_runtime[i] is IEcsLinkResolver<TWorld> r) {
+                var converter = _runtime[i];
+                if (converter == null || !converter.IsEnabled) {
+                    continue;
+                }
+
+                if (converter is IEcsLinkResolver<TWorld> r) {
                     r.ResolveLinks(entity, gameObject);
                 }
             }
@@ -98,7 +103,12 @@ namespace UniGame.StaticEcs.Unity {
                 && entityGid.Status<TWorld>() == GIDStatus.Active
                 && entityGid.TryUnpack<TWorld>(out var entity)) {
                 for (var i = 0; i < _runtime.Count; i++) {
-                    if (_runtime[i] is IEcsConverterDestroyHandler<TWorld> h) {
+                    var converter = _runtime[i];
+                    if (converter == null || !converter.IsEnabled) {
+                        continue;
+                    }
+
+                    if (converter is IEcsConverterDestroyHandler<TWorld> h) {
                         h.OnEntityDestroyed(entity, gameObject);
                     }
                 }

@@ -124,11 +124,72 @@ namespace UniGame.StaticEcs.Unity.Tests
         public void EnabledContract_UsesSerializedFlag()
         {
             var converter = new LifecycleSerializableConverter();
-            typeof(EcsSerializableConverter<TestSerializableConverterWorld>)
-                .GetField("_isEnabled", BindingFlags.Instance | BindingFlags.NonPublic)
-                ?.SetValue(converter, false);
+            SetEnabled(converter, false);
 
             Assert.That(converter.IsEnabled, Is.False);
+        }
+
+        [Test]
+        public void Provider_SkipsDisabledConverterForEveryLifecyclePhase()
+        {
+            World<TestSerializableConverterWorld>.Create(WorldConfig.Default());
+            World<TestSerializableConverterWorld>.Initialize();
+            var host = new GameObject("disabled-provider");
+            var provider = host.AddComponent<TestEntityProvider>();
+            var converter = new LifecycleSerializableConverter();
+            SetEnabled(converter, false);
+            provider.serializableConverters.Add(converter);
+            try
+            {
+                Assert.That(provider.CreateEntity(), Is.True);
+                provider.ResolveLinks();
+                UnityEngine.Object.DestroyImmediate(host);
+                host = null;
+
+                Assert.That(converter.ApplyCount, Is.Zero);
+                Assert.That(converter.ResolveCount, Is.Zero);
+                Assert.That(converter.DestroyCount, Is.Zero);
+            }
+            finally
+            {
+                if (host != null)
+                {
+                    UnityEngine.Object.DestroyImmediate(host);
+                }
+
+                World<TestSerializableConverterWorld>.Destroy();
+            }
+        }
+
+        [Test]
+        public void Provider_ForwardsEnabledConverterLifecycleExactlyOnce()
+        {
+            World<TestSerializableConverterWorld>.Create(WorldConfig.Default());
+            World<TestSerializableConverterWorld>.Initialize();
+            var host = new GameObject("enabled-provider");
+            var provider = host.AddComponent<TestEntityProvider>();
+            var converter = new LifecycleSerializableConverter();
+            provider.serializableConverters.Add(converter);
+            try
+            {
+                Assert.That(provider.CreateEntity(), Is.True);
+                provider.ResolveLinks();
+                UnityEngine.Object.DestroyImmediate(host);
+                host = null;
+
+                Assert.That(converter.ApplyCount, Is.EqualTo(1));
+                Assert.That(converter.ResolveCount, Is.EqualTo(1));
+                Assert.That(converter.DestroyCount, Is.EqualTo(1));
+            }
+            finally
+            {
+                if (host != null)
+                {
+                    UnityEngine.Object.DestroyImmediate(host);
+                }
+
+                World<TestSerializableConverterWorld>.Destroy();
+            }
         }
 
         [Test]
@@ -203,6 +264,15 @@ namespace UniGame.StaticEcs.Unity.Tests
                 World<TestSerializableConverterWorld>.Destroy();
             }
         }
+
+        private static void SetEnabled(
+            EcsSerializableConverter<TestSerializableConverterWorld> converter,
+            bool value)
+        {
+            typeof(EcsSerializableConverter<TestSerializableConverterWorld>)
+                .GetField("_isEnabled", BindingFlags.Instance | BindingFlags.NonPublic)
+                ?.SetValue(converter, value);
+        }
     }
 
     internal sealed class TestConverterPreset : EcsConverterPreset<TestSerializableConverterWorld>
@@ -211,6 +281,11 @@ namespace UniGame.StaticEcs.Unity.Tests
         {
             nestedConverters.Add(converter);
         }
+    }
+
+    internal sealed class TestEntityProvider :
+        EcsEntityProvider<TestSerializableConverterWorld>
+    {
     }
 
     [Serializable]

@@ -1,13 +1,22 @@
-using System.Collections.Generic;
-using System.Threading;
-using FFS.Libraries.StaticEcs;
-using NUnit.Framework;
-using UniGame.Core.Runtime;
-using UniGame.StaticEcs.Unity.Tests.DisabledSupport;
-using UnityEngine;
+[assembly: UniGame.StaticEcs.Unity.StaticEcsTypeRegistrar(
+    typeof(UniGame.StaticEcs.Unity.Tests.RegistrationWorldClosedGenericTypes))]
 
 namespace UniGame.StaticEcs.Unity.Tests
 {
+    using System;
+    using System.Collections.Generic;
+    using System.Linq;
+    using System.Reflection;
+    using System.Threading;
+    using Cysharp.Threading.Tasks;
+    using FFS.Libraries.StaticEcs;
+    using NUnit.Framework;
+    using UniGame.Context.Runtime;
+    using UniGame.Core.Runtime;
+    using UniGame.StaticEcs.Unity.Tests.DisabledSupport;
+    using UnityEngine;
+    using Object = UnityEngine.Object;
+
     [TestFixture]
     public sealed class FeatureTypeRegistrationTests
     {
@@ -15,22 +24,43 @@ namespace UniGame.StaticEcs.Unity.Tests
         public void TearDown()
         {
             DestroyWorld<RegistrationWorld>();
+            DestroyWorld<ProgrammaticFeatureWorld>();
             DestroyWorld<Main>();
         }
 
         [Test]
-        public void ManualRegistrationAndRegisterAllAreCombined()
+        public void ActiveFeatureAssemblyRegistersConcreteTypesAndClosedRegistrar()
         {
             var asset = ScriptableObject.CreateInstance<RegistrationFeatureAsset>();
-            asset.registerClosedGeneric = true;
             var service = CreateService<RegistrationWorld>();
             try
             {
-                service.InitializeAsync(Entries(asset), null, CancellationToken.None).GetAwaiter().GetResult();
-                var entity = World<RegistrationWorld>.NewEntity<Default>();
+                using var context = new EntityContext();
+                service.InitializeAsync(
+                        Entries(asset),
+                        context,
+                        CancellationToken.None)
+                    .GetAwaiter()
+                    .GetResult();
 
+                var entity = World<RegistrationWorld>.NewEntity<Default>();
                 Assert.DoesNotThrow(() => entity.Add<AutoRegisteredComponent>());
+                Assert.DoesNotThrow(() => entity.Set<AutoRegisteredTag>());
                 Assert.DoesNotThrow(() => entity.Add<ClosedGenericComponent<int>>());
+                Assert.DoesNotThrow(() =>
+                    entity.Add<World<RegistrationWorld>.Multi<AutoRegisteredMulti>>());
+                var target = World<RegistrationWorld>.NewEntity<Default>();
+                Assert.AreEqual(
+                    LinkOppStatus.Ok,
+                    entity.GID.TryAddLink<RegistrationWorld, AutoRegisteredLink>(target));
+                Assert.AreEqual(
+                    LinkOppStatus.Ok,
+                    entity.GID.TryAddLinkItem<RegistrationWorld, AutoRegisteredLinks>(target));
+                Assert.DoesNotThrow(() =>
+                    World<RegistrationWorld>.NewEntity<AutoRegisteredEntityType>());
+                var receiver =
+                    World<RegistrationWorld>.RegisterEventReceiver<AutoRegisteredEvent>();
+                World<RegistrationWorld>.DeleteEventReceiver(ref receiver);
             }
             finally
             {
@@ -40,17 +70,50 @@ namespace UniGame.StaticEcs.Unity.Tests
         }
 
         [Test]
-        public void RegisterAllSkipsOpenGenericDefinitions()
+        public void ConcreteEntityTypesExposePublicIdForEditorMetadata()
+        {
+            var invalidTypes = AppDomain.CurrentDomain
+                .GetAssemblies()
+                .Where(static assembly => !assembly.IsDynamic)
+                .SelectMany(GetLoadableTypes)
+                .Where(static type =>
+                    type is { IsAbstract: false, ContainsGenericParameters: false } &&
+                    typeof(IEntityType).IsAssignableFrom(type))
+                .Where(static type =>
+                    type.GetMethod(
+                        nameof(IEntityType.Id),
+                        BindingFlags.Instance | BindingFlags.Public,
+                        null,
+                        Type.EmptyTypes,
+                        null) == null)
+                .Select(static type => type.FullName)
+                .OrderBy(static typeName => typeName)
+                .ToArray();
+
+            Assert.That(
+                invalidTypes,
+                Is.Empty,
+                "Static ECS editor metadata requires a public parameterless IEntityType.Id() method.");
+        }
+
+        [Test]
+        public void RegisterAllSkipsUnlistedClosedGenericConstruction()
         {
             var asset = ScriptableObject.CreateInstance<RegistrationFeatureAsset>();
-            asset.registerClosedGeneric = false;
             var service = CreateService<RegistrationWorld>();
             try
             {
-                service.InitializeAsync(Entries(asset), null, CancellationToken.None).GetAwaiter().GetResult();
+                using var context = new EntityContext();
+                service.InitializeAsync(
+                        Entries(asset),
+                        context,
+                        CancellationToken.None)
+                    .GetAwaiter()
+                    .GetResult();
                 var entity = World<RegistrationWorld>.NewEntity<Default>();
 
-                Assert.Catch<System.Exception>(() => entity.Add<ClosedGenericComponent<int>>());
+                Assert.Catch<System.Exception>(() =>
+                    entity.Add<ClosedGenericComponent<string>>());
             }
             finally
             {
@@ -60,23 +123,56 @@ namespace UniGame.StaticEcs.Unity.Tests
         }
 
         [Test]
-        public void DisabledFeatureAssemblyIsNotScanned()
+        public void ProgrammaticFeatureBaseAssemblyIsScanned()
+        {
+            var asset =
+                ScriptableObject.CreateInstance<DerivedRegistrationFeatureAsset>();
+            var service = CreateService<ProgrammaticFeatureWorld>();
+            try
+            {
+                using var context = new EntityContext();
+                service.InitializeAsync(
+                        Entries(asset),
+                        context,
+                        CancellationToken.None)
+                    .GetAwaiter()
+                    .GetResult();
+
+                var entity =
+                    World<ProgrammaticFeatureWorld>.NewEntity<Default>();
+                Assert.DoesNotThrow(() =>
+                    entity.Add<ProgrammaticFeatureBaseComponent>());
+            }
+            finally
+            {
+                service.Dispose();
+                Object.DestroyImmediate(asset);
+            }
+        }
+
+        [Test]
+        public void DisabledFeatureAssemblyIsNotScannedOrInitialized()
         {
             var asset = ScriptableObject.CreateInstance<DisabledFeatureAsset>();
             var service = CreateService<Main>();
             try
             {
+                using var context = new EntityContext();
                 service.InitializeAsync(
-                    new List<StaticEcsFeatureEntry>
-                    {
-                        new() { enabled = false, asset = asset },
-                    },
-                    null,
-                    CancellationToken.None).GetAwaiter().GetResult();
-                var entity = World<Main>.NewEntity<Default>();
+                        new List<StaticEcsFeatureEntry>
+                        {
+                            new() { enabled = false, asset = asset },
+                        },
+                        context,
+                        CancellationToken.None)
+                    .GetAwaiter()
+                    .GetResult();
 
-                Assert.Catch<System.Exception>(() => entity.Add<DisabledAutoComponent>());
-                Assert.Catch<System.Exception>(() => entity.Add<DisabledManualComponent>());
+                var entity = World<Main>.NewEntity<Default>();
+                Assert.Catch<System.Exception>(() =>
+                    entity.Add<DisabledAutoComponent>());
+                Assert.IsFalse(
+                    World<Main>.HasResource<DisabledFeatureInitializedResource>());
             }
             finally
             {
@@ -89,17 +185,21 @@ namespace UniGame.StaticEcs.Unity.Tests
             where TWorld : struct, IWorldType
         {
             var systems = StaticEcsSystemsConfig.Default;
-            systems.update = true;
-            systems.fixedUpdate = true;
-            systems.lateUpdate = true;
-            systems.cleanup = true;
+            systems.update = false;
             return new EcsService<TWorld>(StaticEcsWorldConfig.Default, systems);
         }
 
-        private static List<StaticEcsFeatureEntry> Entries(StaticEcsFeatureAssetBase asset) =>
-            new() { new StaticEcsFeatureEntry { enabled = true, asset = asset } };
+        private static List<StaticEcsFeatureEntry> Entries(
+            StaticEcsFeatureAssetBase asset)
+        {
+            return new List<StaticEcsFeatureEntry>
+            {
+                new() { enabled = true, asset = asset },
+            };
+        }
 
-        private static void DestroyWorld<TWorld>() where TWorld : struct, IWorldType
+        private static void DestroyWorld<TWorld>()
+            where TWorld : struct, IWorldType
         {
             if (World<TWorld>.Status == WorldStatus.Created)
             {
@@ -112,36 +212,71 @@ namespace UniGame.StaticEcs.Unity.Tests
             }
         }
 
-        private struct RegistrationWorld : IWorldType { }
-
-        private struct AutoRegisteredComponent : IComponent { }
-
-        private struct ClosedGenericComponent<T> : IComponent { }
-
-        private sealed class RegistrationFeatureAsset : StaticEcsFeatureAsset<RegistrationWorld>
+        private static IEnumerable<Type> GetLoadableTypes(Assembly assembly)
         {
-            public bool registerClosedGeneric;
-
-            public override IStaticEcsFeature<RegistrationWorld> CreateFeature(IContext context) =>
-                new RegistrationFeature(registerClosedGeneric);
+            try
+            {
+                return assembly.GetTypes();
+            }
+            catch (ReflectionTypeLoadException exception)
+            {
+                return exception.Types.Where(static type => type != null);
+            }
         }
+    }
 
-        private sealed class RegistrationFeature : StaticEcsFeature<RegistrationWorld>
+    public struct RegistrationWorld : IWorldType { }
+
+    public struct AutoRegisteredComponent : IComponent { }
+
+    public struct AutoRegisteredTag : ITag { }
+
+    public struct AutoRegisteredEvent : IEvent { }
+
+    public struct AutoRegisteredMulti : IMultiComponent { }
+
+    public struct AutoRegisteredLink : ILinkType { }
+
+    public struct AutoRegisteredLinks : ILinksType { }
+
+    public struct AutoRegisteredEntityType : IEntityType
+    {
+        public byte Id()
         {
-            private readonly bool _registerClosedGeneric;
+            return 1;
+        }
+    }
 
-            public RegistrationFeature(bool registerClosedGeneric)
-            {
-                _registerClosedGeneric = registerClosedGeneric;
-            }
+    public struct ClosedGenericComponent<T> : IComponent { }
 
-            public override void RegisterTypes(World<RegistrationWorld>.TypeRegistrar types)
-            {
-                if (_registerClosedGeneric)
-                {
-                    types.Component<ClosedGenericComponent<int>>();
-                }
-            }
+    public sealed class RegistrationFeatureAsset :
+        StaticEcsFeatureAsset<RegistrationWorld>
+    {
+        protected override UniTask OnInitializeAsync(
+            ILifeTime lifeTime)
+        {
+            return UniTask.CompletedTask;
+        }
+    }
+
+    public sealed class DerivedRegistrationFeature :
+        ProgrammaticFeatureBase
+    {
+    }
+
+    public sealed class DerivedRegistrationFeatureAsset :
+        StaticEcsFeatureAsset<
+            ProgrammaticFeatureWorld,
+            DerivedRegistrationFeature>
+    {
+    }
+
+    public sealed class RegistrationWorldClosedGenericTypes :
+        IStaticEcsTypeRegistrar<RegistrationWorld>
+    {
+        public void Register(World<RegistrationWorld>.TypeRegistrar types)
+        {
+            types.Component<ClosedGenericComponent<int>>();
         }
     }
 }

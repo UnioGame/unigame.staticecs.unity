@@ -15,7 +15,6 @@ namespace UniGame.StaticEcs.Editor.View.Tabs
         private const string TabName = "Feature Catalog";
 
         private readonly List<Type> _featureTypes = new();
-        private readonly List<Type> _systemsFeatureTypes = new();
         private string _filter = string.Empty;
         private Vector2 _scroll;
 
@@ -33,7 +32,6 @@ namespace UniGame.StaticEcs.Editor.View.Tabs
         public void Destroy()
         {
             _featureTypes.Clear();
-            _systemsFeatureTypes.Clear();
         }
 
         public void Draw()
@@ -49,13 +47,12 @@ namespace UniGame.StaticEcs.Editor.View.Tabs
             }
 
             EditorGUILayout.LabelField(
-                $"Features: {_featureTypes.Count}, Systems features: {_systemsFeatureTypes.Count}",
+                $"Features: {_featureTypes.Count}",
                 EditorStyles.miniLabel);
 
             _scroll = EditorGUILayout.BeginScrollView(_scroll);
 
             DrawSection($"IStaticEcsFeature<{typeof(TWorld).Name}>", _featureTypes);
-            DrawSection($"IStaticEcsSystemsFeature<{typeof(TWorld).Name}, *>", _systemsFeatureTypes);
 
             EditorGUILayout.EndScrollView();
         }
@@ -98,7 +95,6 @@ namespace UniGame.StaticEcs.Editor.View.Tabs
         private void RefreshCatalog()
         {
             _featureTypes.Clear();
-            _systemsFeatureTypes.Clear();
 
             var featureContract = typeof(IStaticEcsFeature<TWorld>);
 
@@ -126,31 +122,11 @@ namespace UniGame.StaticEcs.Editor.View.Tabs
                         continue;
                     }
 
-                    var isSystemsFeature = false;
-                    foreach (var iface in type.GetInterfaces())
-                    {
-                        if (iface.IsGenericType
-                            && iface.GetGenericTypeDefinition() == typeof(IStaticEcsSystemsFeature<,>)
-                            && iface.GetGenericArguments()[0] == typeof(TWorld))
-                        {
-                            isSystemsFeature = true;
-                            break;
-                        }
-                    }
-
-                    if (isSystemsFeature)
-                    {
-                        _systemsFeatureTypes.Add(type);
-                    }
-                    else
-                    {
-                        _featureTypes.Add(type);
-                    }
+                    _featureTypes.Add(type);
                 }
             }
 
             _featureTypes.Sort((a, b) => string.Compare(a.FullName, b.FullName, StringComparison.Ordinal));
-            _systemsFeatureTypes.Sort((a, b) => string.Compare(a.FullName, b.FullName, StringComparison.Ordinal));
         }
     }
 }

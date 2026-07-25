@@ -7,7 +7,8 @@
         "unigame.contextdata.runtime",
         "unigame.rx.runtime",
         "FFS.StaticEcs",
-        "unigame.unicore.runtime"
+        "unigame.unicore.runtime",
+        "UniTask"
     ],
     "includePlatforms": ["Editor"],
     "noEngineReferences": false

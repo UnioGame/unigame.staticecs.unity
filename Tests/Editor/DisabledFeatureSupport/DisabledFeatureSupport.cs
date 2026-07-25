@@ -1,26 +1,41 @@
-using FFS.Libraries.StaticEcs;
-using UniGame.Core.Runtime;
-
 namespace UniGame.StaticEcs.Unity.Tests.DisabledSupport
 {
+    using Cysharp.Threading.Tasks;
+    using FFS.Libraries.StaticEcs;
+    using UniGame.Core.Runtime;
+    using UniGame.StaticEcs;
+
+    /// <summary>Component owned by a programmatic feature base in this support assembly.</summary>
+    public struct ProgrammaticFeatureBaseComponent : IComponent { }
+
+    /// <summary>World used to verify cross-assembly programmatic feature discovery.</summary>
+    public struct ProgrammaticFeatureWorld : IWorldType { }
+
+    /// <summary>Programmatic base used to verify cross-assembly feature type discovery.</summary>
+    public class ProgrammaticFeatureBase :
+        StaticEcsFeature<ProgrammaticFeatureWorld>
+    {
+        /// <inheritdoc />
+        public override UniTask InitializeAsync(ILifeTime lifeTime)
+        {
+            return UniTask.CompletedTask;
+        }
+    }
+
     /// <summary>Component used to verify that disabled feature assemblies are not auto-scanned.</summary>
     public struct DisabledAutoComponent : IComponent { }
-
-    /// <summary>Component used to verify that disabled features do not run manual registration.</summary>
-    public struct DisabledManualComponent : IComponent { }
 
     /// <summary>Feature asset intentionally disabled by the registration test.</summary>
     public sealed class DisabledFeatureAsset : StaticEcsFeatureAsset
     {
-        /// <summary>Creates the isolated test feature.</summary>
-        public override IStaticEcsFeature<Main> CreateFeature(IContext context) => new DisabledFeature();
-    }
-
-    internal sealed class DisabledFeature : StaticEcsFeature<Main>
-    {
-        public override void RegisterTypes(World<Main>.TypeRegistrar types)
+        protected override UniTask OnInitializeAsync(ILifeTime lifeTime)
         {
-            types.Component<DisabledManualComponent>();
+            var resource = new DisabledFeatureInitializedResource();
+            World<Main>.SetResource(resource);
+            return UniTask.CompletedTask;
         }
     }
+
+    /// <summary>Signals that the disabled feature was incorrectly initialized.</summary>
+    public struct DisabledFeatureInitializedResource : IResource { }
 }

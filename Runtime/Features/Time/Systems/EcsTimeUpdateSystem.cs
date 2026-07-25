@@ -4,7 +4,7 @@ using UnityTime = UnityEngine.Time;
 namespace UniGame.StaticEcs.Time
 {
     /// <summary>Copies Unity update timing into the ECS time resource.</summary>
-    public sealed class EcsTimeUpdateSystem<TWorld> : ISystem
+    public class EcsTimeUpdateSystem<TWorld> : ISystem
         where TWorld : struct, IWorldType
     {
         /// <inheritdoc />

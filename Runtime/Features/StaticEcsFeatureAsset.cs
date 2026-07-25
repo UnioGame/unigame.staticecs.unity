@@ -1,10 +1,11 @@
-using System;
-using FFS.Libraries.StaticEcs;
-using UniGame.Core.Runtime;
-using UnityEngine;
-
 namespace UniGame.StaticEcs.Unity
 {
+    using System;
+    using Cysharp.Threading.Tasks;
+    using FFS.Libraries.StaticEcs;
+    using UniGame.Core.Runtime;
+    using UnityEngine;
+
 #if UNITY_EDITOR
     using UniModules.Editor;
 #endif
@@ -12,16 +13,6 @@ namespace UniGame.StaticEcs.Unity
 #if ODIN_INSPECTOR
     using Sirenix.OdinInspector;
 #endif
-
-    /// <summary>Controls when a configured ECS feature participates in startup.</summary>
-    public enum StaticEcsFeatureActivation
-    {
-        /// <summary>The feature follows its enabled flag in every build.</summary>
-        Always,
-
-        /// <summary>The feature participates only when GAME_DEBUG is defined.</summary>
-        GameDebug,
-    }
 
     /// <summary>Non-generic base for feature assets stored by an ECS service source.</summary>
     public abstract class StaticEcsFeatureAssetBase : ScriptableObject
@@ -32,6 +23,9 @@ namespace UniGame.StaticEcs.Unity
         /// <summary>Gets the display name used by editor tooling and startup reports.</summary>
         public virtual string FeatureName => name;
 
+        /// <summary>Gets the programmatic feature type used for assembly discovery.</summary>
+        public virtual Type ProgrammaticFeatureType => null;
+
         /// <summary>Opens the feature implementation in the configured script editor.</summary>
         public virtual void OpenFeatureScript()
         {
@@ -40,27 +34,11 @@ namespace UniGame.StaticEcs.Unity
 #endif
         }
 
-        internal StaticEcsRuntimeFeature CreateRuntimeFeature(IContext context)
+        internal StaticEcsFeatureAssetBase CreateRuntimeAsset()
         {
             var runtimeAsset = Instantiate(this);
             runtimeAsset.hideFlags = HideFlags.DontSave;
-
-            try
-            {
-                var runtimeFeature = runtimeAsset.CreateFeatureObject(context);
-                if (runtimeFeature == null)
-                {
-                    throw new InvalidOperationException(
-                        $"Feature asset `{name}` created a null runtime feature.");
-                }
-
-                return new StaticEcsRuntimeFeature(runtimeFeature, runtimeAsset);
-            }
-            catch
-            {
-                DestroyRuntimeAsset(runtimeAsset);
-                throw;
-            }
+            return runtimeAsset;
         }
 
         internal static void DestroyRuntimeAsset(StaticEcsFeatureAssetBase runtimeAsset)
@@ -78,33 +56,43 @@ namespace UniGame.StaticEcs.Unity
 
             DestroyImmediate(runtimeAsset);
         }
-
-        internal abstract object CreateFeatureObject(IContext context);
     }
 
-    /// <summary>Factory asset resolved from a fresh runtime clone for a specific world.</summary>
-    public abstract class StaticEcsFeatureAsset<TWorld> : StaticEcsFeatureAssetBase
+    /// <summary>Runtime-cloned feature asset for a specific Static ECS world.</summary>
+    public abstract class StaticEcsFeatureAsset<TWorld> :
+        StaticEcsFeatureAssetBase,
+        IStaticEcsFeature<TWorld>
         where TWorld : struct, IWorldType
     {
         /// <inheritdoc />
         public sealed override Type WorldType => typeof(TWorld);
 
-        /// <summary>Creates or exposes the feature owned by this runtime asset instance.</summary>
-        public abstract IStaticEcsFeature<TWorld> CreateFeature(IContext context);
-
-        internal sealed override object CreateFeatureObject(IContext context)
+        /// <inheritdoc />
+        public UniTask InitializeAsync(ILifeTime lifeTime)
         {
-            return CreateFeature(context);
+            return OnInitializeAsync(lifeTime);
         }
+
+        /// <summary>Publishes feature resources and adds its systems.</summary>
+        protected abstract UniTask OnInitializeAsync(ILifeTime lifeTime);
     }
 
-    /// <summary>Feature asset that exposes a serializable pure feature for a specific world.</summary>
-    public abstract class StaticEcsFeatureAsset<TWorld, TFeature> : StaticEcsFeatureAsset<TWorld>
+    /// <summary>Serializes and initializes a programmatic feature for a specific world.</summary>
+    public abstract class StaticEcsFeatureAsset<TWorld, TFeature> :
+        StaticEcsFeatureAsset<TWorld>
         where TWorld : struct, IWorldType
         where TFeature : class, IStaticEcsFeature<TWorld>, new()
     {
-        /// <summary>Serializable authoring feature cloned with the runtime asset instance.</summary>
+        /// <summary>Serialized programmatic feature implementation.</summary>
+#if ODIN_INSPECTOR
+        [HideLabel]
+        [InlineProperty]
+#endif
         public TFeature feature = new();
+
+        /// <inheritdoc />
+        public override Type ProgrammaticFeatureType =>
+            typeof(TFeature);
 
         /// <inheritdoc />
         public sealed override void OpenFeatureScript()
@@ -115,70 +103,9 @@ namespace UniGame.StaticEcs.Unity
         }
 
         /// <inheritdoc />
-        public sealed override IStaticEcsFeature<TWorld> CreateFeature(IContext context)
+        protected sealed override UniTask OnInitializeAsync(ILifeTime lifeTime)
         {
-            return feature;
+            return feature.InitializeAsync(lifeTime);
         }
-    }
-
-    internal sealed class StaticEcsRuntimeFeature
-    {
-        internal StaticEcsRuntimeFeature(object feature, StaticEcsFeatureAssetBase asset)
-        {
-            Feature = feature;
-            Asset = asset;
-        }
-
-        internal object Feature { get; }
-
-        internal StaticEcsFeatureAssetBase Asset { get; }
-    }
-
-    /// <summary>One ordered feature reference in an ECS service configuration.</summary>
-    [Serializable]
-    public sealed class StaticEcsFeatureEntry
-    {
-        /// <summary>Controls whether this feature participates in startup.</summary>
-        public bool enabled = true;
-
-        /// <summary>Controls the build configuration in which the feature can participate.</summary>
-        public StaticEcsFeatureActivation activation;
-
-        /// <summary>Asset factory used to create the runtime feature.</summary>
-#if ODIN_INSPECTOR
-        [InlineButton(nameof(OpenFeatureScript), SdfIconType.Folder2Open)]
-#endif
-        public StaticEcsFeatureAssetBase asset;
-
-        /// <summary>Returns whether the feature is enabled for the current build.</summary>
-        public bool IsEnabled
-        {
-            get
-            {
-                if (!enabled)
-                {
-                    return false;
-                }
-
-                if (activation != StaticEcsFeatureActivation.GameDebug)
-                {
-                    return true;
-                }
-
-#if GAME_DEBUG
-                return true;
-#else
-                return false;
-#endif
-            }
-        }
-
-        /// <summary>Opens the configured feature implementation in the script editor.</summary>
-        public void OpenFeatureScript()
-        {
-            asset?.OpenFeatureScript();
-        }
-
-        public string Name => asset == null ? "EMPTY" : asset.name;
     }
 }

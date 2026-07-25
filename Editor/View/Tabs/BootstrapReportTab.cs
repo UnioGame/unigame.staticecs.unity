@@ -33,7 +33,7 @@ namespace UniGame.StaticEcs.Editor.View.Tabs {
                 EditorGUILayout.Toggle("Types Registered", report.typesRegistered);
                 EditorGUILayout.Toggle("World Initialized", report.worldInitialized);
                 EditorGUILayout.Toggle("Systems Initialized", report.systemsInitialized);
-                EditorGUILayout.IntField("Features Registered", report.featuresRegistered);
+                EditorGUILayout.IntField("Feature Count", report.featureCount);
                 EditorGUILayout.EnumPopup("Stage", report.stage);
                 EditorGUILayout.EnumPopup("Failed Stage", report.failedStage);
                 EditorGUILayout.TextField("Current Feature", report.currentFeature ?? string.Empty);

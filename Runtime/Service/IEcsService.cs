@@ -13,5 +13,7 @@ namespace UniGame.StaticEcs.Unity {
         void LateUpdate();
 
         void CleanupUpdate();
+
+        void AdvanceTick();
     }
 }
