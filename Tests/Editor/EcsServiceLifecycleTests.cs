@@ -151,6 +151,37 @@ namespace UniGame.StaticEcs.Unity.Tests
         }
 
         [Test]
+        public void UpdateDependentFeatureWithoutUpdateGroupRollsBack()
+        {
+            var asset = CreateAsset("requires-update", addSystems: true);
+            var systems = StaticEcsSystemsConfig.Default;
+            systems.update = false;
+            var service = new EcsService<TestWorld>(
+                StaticEcsWorldConfig.Default,
+                systems);
+            try
+            {
+                Assert.CatchAsync<Exception>(async () =>
+                    await service.InitializeAsync(
+                        Entries(asset),
+                        _context,
+                        CancellationToken.None));
+
+                Assert.AreEqual(
+                    EcsStartupStage.InitializeFeatures,
+                    service.Report.failedStage);
+                Assert.AreEqual("requires-update", service.Report.failedFeature);
+                Assert.AreEqual(WorldStatus.NotCreated, World<TestWorld>.Status);
+                Assert.AreEqual(0, RuntimeAssets.Count);
+            }
+            finally
+            {
+                service.Dispose();
+                Object.DestroyImmediate(asset);
+            }
+        }
+
+        [Test]
         public void CancellationRollsBackWorldAndRuntimeAssetClone()
         {
             var asset = CreateAsset("cancelled", addSystems: false);
@@ -458,9 +489,7 @@ namespace UniGame.StaticEcs.Unity.Tests
                 World<TestWorld>.Destroy(withHooks: false);
             }
             else if (World<TestWorld>.Status == WorldStatus.Initialized)
-            {
                 World<TestWorld>.Destroy();
-            }
         }
 
         private struct TestWorld : IWorldType { }
@@ -484,9 +513,7 @@ namespace UniGame.StaticEcs.Unity.Tests
                 LastWorldLifeTime = World<TestWorld>.Handle.GetLifeTime();
                 Log.Add($"{id}:initialize:begin");
                 if (Gates.TryGetValue(id, out var gate))
-                {
                     await gate.Task.AttachExternalCancellation(lifeTime.Token);
-                }
 
                 if (addSystems)
                 {
@@ -499,16 +526,12 @@ namespace UniGame.StaticEcs.Unity.Tests
                 }
 
                 if (addThrowingSystem)
-                {
                     World<TestWorld>.Systems<StaticEcsUpdateSystems>.Add(
                         new ThrowingDestroySystem(),
                         2);
-                }
 
                 if (failInitialization)
-                {
                     throw new InvalidOperationException($"{id} failed.");
-                }
 
                 Log.Add($"{id}:initialize:end");
             }
@@ -517,9 +540,7 @@ namespace UniGame.StaticEcs.Unity.Tests
             {
                 RuntimeAssets.Remove(this);
                 if ((hideFlags & HideFlags.DontSave) != 0)
-                {
                     Log.Add($"{id}:asset:destroy");
-                }
             }
         }
 

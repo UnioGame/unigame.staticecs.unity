@@ -32,9 +32,7 @@ namespace UniGame.StaticEcs.Unity
             where TResource : IResource
         {
             if (resource.IsRegistered)
-            {
                 return resource.Value;
-            }
 
             using var timeoutCancellation =
                 CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);

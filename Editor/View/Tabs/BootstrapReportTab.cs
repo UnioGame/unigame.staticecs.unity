@@ -43,9 +43,8 @@ namespace UniGame.StaticEcs.Editor.View.Tabs {
                 EditorGUILayout.LabelField("Success", report.IsSuccess.ToString());
             }
 
-            if (GUILayout.Button("Repaint")) {
+            if (GUILayout.Button("Repaint"))
                 EditorWindow.focusedWindow?.Repaint();
-            }
         }
     }
 }

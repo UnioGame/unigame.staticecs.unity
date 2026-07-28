@@ -400,9 +400,7 @@ namespace UniGame.StaticEcs.Unity.Tests
                 World<TWorld>.Destroy(withHooks: false);
             }
             else if (World<TWorld>.Status == WorldStatus.Initialized)
-            {
                 World<TWorld>.Destroy();
-            }
         }
 
         private struct ResourceWorld : IWorldType { }

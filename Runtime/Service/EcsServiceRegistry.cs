@@ -10,9 +10,8 @@ namespace UniGame.StaticEcs.Unity {
         }
 
         public static void Unregister(IEcsService service) {
-            if (!ReferenceEquals(Active, service)) {
+            if (!ReferenceEquals(Active, service))
                 return;
-            }
 
             Active = null;
         }

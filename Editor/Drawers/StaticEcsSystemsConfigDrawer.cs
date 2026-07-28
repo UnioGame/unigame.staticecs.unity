@@ -38,9 +38,8 @@ namespace UniGame.StaticEcs.Editor.Drawers {
 
             foreach (var fieldName in LoopFields) {
                 var prop = property.FindPropertyRelative(fieldName);
-                if (prop == null) {
+                if (prop == null)
                     continue;
-                }
 
                 EditorGUI.PropertyField(
                     new Rect(position.x, y, position.width, EditorGUIUtility.singleLineHeight),
@@ -49,20 +48,18 @@ namespace UniGame.StaticEcs.Editor.Drawers {
             }
 
             var baseSize = property.FindPropertyRelative("baseSize");
-            if (baseSize != null) {
+            if (baseSize != null)
                 EditorGUI.PropertyField(
                     new Rect(position.x, y, position.width, EditorGUIUtility.singleLineHeight),
                     baseSize);
-            }
 
             EditorGUI.indentLevel--;
             EditorGUI.EndProperty();
         }
 
         public override float GetPropertyHeight(SerializedProperty property, GUIContent label) {
-            if (!property.isExpanded) {
+            if (!property.isExpanded)
                 return EditorGUIUtility.singleLineHeight;
-            }
 
             var lines = 1 + 1 + LoopFields.Length + 1;
             return EditorGUIUtility.singleLineHeight * lines + lines * 2f;

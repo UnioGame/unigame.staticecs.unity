@@ -49,9 +49,8 @@ namespace UniGame.StaticEcs.Editor.Drawers {
         }
 
         public override float GetPropertyHeight(SerializedProperty property, GUIContent label) {
-            if (!property.isExpanded) {
+            if (!property.isExpanded)
                 return EditorGUIUtility.singleLineHeight;
-            }
 
             var groups = 3;
             var fields = CapacityFields.Length + ThreadingFields.Length + TrackingFields.Length;
@@ -68,9 +67,8 @@ namespace UniGame.StaticEcs.Editor.Drawers {
 
             foreach (var fieldName in fields) {
                 var prop = property.FindPropertyRelative(fieldName);
-                if (prop == null) {
+                if (prop == null)
                     continue;
-                }
 
                 EditorGUI.PropertyField(
                     new Rect(position.x, y, position.width, EditorGUIUtility.singleLineHeight),

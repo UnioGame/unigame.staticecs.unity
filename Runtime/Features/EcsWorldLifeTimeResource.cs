@@ -24,19 +24,15 @@ namespace UniGame.StaticEcs.Unity
         public static ILifeTime GetLifeTime(this ref WorldHandle world)
         {
             if (world.WorldType == null)
-            {
                 throw new InvalidOperationException(
                     "Static ECS world lifetime is unavailable because the world is not active.");
-            }
 
             var resourceType = typeof(EcsWorldLifeTimeResource);
             if (!world.HasResource(resourceType))
-            {
                 throw new InvalidOperationException(
                     $"Static ECS world `{world.WorldType.FullName}` has no " +
                     $"`{nameof(EcsWorldLifeTimeResource)}`. " +
                     "The lifetime is available only after EcsService bootstrap.");
-            }
 
             return ((EcsWorldLifeTimeResource)world.GetResource(resourceType)).LifeTime;
         }

@@ -25,9 +25,8 @@ namespace UniGame.StaticEcs.Editor.View {
         }
 
         private void Update() {
-            if (_projectTabsInjected) {
+            if (_projectTabsInjected)
                 return;
-            }
 
             if (TabsField == null) {
                 if (!_injectionWarningLogged) {
@@ -41,14 +40,12 @@ namespace UniGame.StaticEcs.Editor.View {
                 return;
             }
 
-            if (TabsField.GetValue(this) is not List<IStaticEcsViewTab> tabs || tabs.Count == 0) {
+            if (TabsField.GetValue(this) is not List<IStaticEcsViewTab> tabs || tabs.Count == 0)
                 return;
-            }
 
             foreach (var tab in CreateProjectTabs()) {
-                if (tab == null) {
+                if (tab == null)
                     continue;
-                }
 
                 tab.SetNavigation(this);
                 tab.Init();

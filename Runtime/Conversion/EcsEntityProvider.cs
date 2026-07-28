@@ -21,9 +21,8 @@ namespace UniGame.StaticEcs.Unity {
         public IReadOnlyList<IEcsConverter<TWorld>> RuntimeConverters => _runtime;
 
         public void RegisterRuntime(IEcsConverter<TWorld> converter) {
-            if (converter == null || _registered.Contains(converter)) {
+            if (converter == null || _registered.Contains(converter))
                 return;
-            }
             _registered.Add(converter);
         }
 
@@ -49,30 +48,25 @@ namespace UniGame.StaticEcs.Unity {
         }
 
         private void TryCreateOrDefer() {
-            if (World<TWorld>.Status == WorldStatus.Initialized) {
+            if (World<TWorld>.Status == WorldStatus.Initialized)
                 CreateEntity();
-            }
-            else {
+            else
                 _pendingDeferredCreate = true;
-            }
         }
 
         public override bool CreateEntity() {
-            if (!base.CreateEntity()) {
+            if (!base.CreateEntity())
                 return false;
-            }
 
-            if (!entityGid.TryUnpack<TWorld>(out var entity)) {
+            if (!entityGid.TryUnpack<TWorld>(out var entity))
                 return true;
-            }
 
             CollectConverters();
 
             for (var i = 0; i < _runtime.Count; i++) {
                 var c = _runtime[i];
-                if (c == null || !c.IsEnabled) {
+                if (c == null || !c.IsEnabled)
                     continue;
-                }
                 c.Apply(entity, gameObject);
             }
 
@@ -88,37 +82,31 @@ namespace UniGame.StaticEcs.Unity {
 
             for (var i = 0; i < _runtime.Count; i++) {
                 var converter = _runtime[i];
-                if (converter == null || !converter.IsEnabled) {
+                if (converter == null || !converter.IsEnabled)
                     continue;
-                }
 
-                if (converter is IEcsLinkResolver<TWorld> r) {
+                if (converter is IEcsLinkResolver<TWorld> r)
                     r.ResolveLinks(entity, gameObject);
-                }
             }
         }
 
         private new void OnDestroy() {
             if (World<TWorld>.Status == WorldStatus.Initialized
                 && entityGid.Status<TWorld>() == GIDStatus.Active
-                && entityGid.TryUnpack<TWorld>(out var entity)) {
+                && entityGid.TryUnpack<TWorld>(out var entity))
                 for (var i = 0; i < _runtime.Count; i++) {
                     var converter = _runtime[i];
-                    if (converter == null || !converter.IsEnabled) {
+                    if (converter == null || !converter.IsEnabled)
                         continue;
-                    }
 
-                    if (converter is IEcsConverterDestroyHandler<TWorld> h) {
+                    if (converter is IEcsConverterDestroyHandler<TWorld> h)
                         h.OnEntityDestroyed(entity, gameObject);
-                    }
                 }
-            }
 
             if (onDestroyType == OnDestroyType.DestroyEntity
                 && World<TWorld>.Status == WorldStatus.Initialized
-                && entityGid.Status<TWorld>() == GIDStatus.Active) {
+                && entityGid.Status<TWorld>() == GIDStatus.Active)
                 entityGid.Unpack<TWorld>().Destroy();
-            }
 
             entityGid = default;
             _runtime.Clear();
@@ -136,19 +124,17 @@ namespace UniGame.StaticEcs.Unity {
                 _runtime.Add(c);
             }
 
-            if (serializableConverters != null) {
+            if (serializableConverters != null)
                 for (var i = 0; i < serializableConverters.Count; i++) {
                     var c = serializableConverters[i];
                     if (c != null) _runtime.Add(c);
                 }
-            }
 
-            if (assetConverters != null) {
+            if (assetConverters != null)
                 for (var i = 0; i < assetConverters.Count; i++) {
                     var c = assetConverters[i];
                     if (c != null) _runtime.Add(c);
                 }
-            }
 
             for (var i = 0; i < _registered.Count; i++) {
                 var c = _registered[i];

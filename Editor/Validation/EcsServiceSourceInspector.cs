@@ -35,17 +35,13 @@ namespace UniGame.StaticEcs.Editor.Validation
 
             EditorGUILayout.Space();
             if (GUILayout.Button("Synchronize Features"))
-            {
                 Synchronize();
-            }
 
             if (_hasSyncResult)
-            {
                 EditorGUILayout.HelpBox(
                     $"Added: {_lastSync.added}, removed: {_lastSync.removed}, " +
                     $"wrong world skipped: {_lastSync.wrongWorldSkipped}.",
                     MessageType.Info);
-            }
 
             DrawValidation();
         }
@@ -89,23 +85,17 @@ namespace UniGame.StaticEcs.Editor.Validation
             }
 
             if (hasNull || hasDuplicates)
-            {
                 EditorGUILayout.HelpBox(
                     "Null or duplicate feature entries detected. Use Synchronize Features to remove them.",
                     MessageType.Error);
-            }
 
             if (hasWrongWorld)
-            {
                 EditorGUILayout.HelpBox(
                     $"At least one feature targets a world other than {typeof(TWorld).Name}.",
                     MessageType.Error);
-            }
 
             if (!hasAnyEnabled)
-            {
                 EditorGUILayout.HelpBox("All configured features are disabled.", MessageType.Warning);
-            }
         }
     }
 
@@ -143,9 +133,7 @@ namespace UniGame.StaticEcs.Editor.Validation
                 var path = AssetDatabase.GUIDToAssetPath(guids[i]);
                 var asset = AssetDatabase.LoadAssetAtPath<StaticEcsFeatureAssetBase>(path);
                 if (asset == null)
-                {
                     continue;
-                }
 
                 candidates.Add(asset);
                 paths.Add(path);
@@ -200,9 +188,7 @@ namespace UniGame.StaticEcs.Editor.Validation
             {
                 var candidate = orderedCandidates[i];
                 if (candidate == null)
-                {
                     continue;
-                }
 
                 if (candidate.WorldType != typeof(TWorld))
                 {
@@ -211,9 +197,7 @@ namespace UniGame.StaticEcs.Editor.Validation
                 }
 
                 if (!seen.Add(candidate))
-                {
                     continue;
-                }
 
                 entries.Add(new StaticEcsFeatureEntry { enabled = true, asset = candidate });
                 added++;

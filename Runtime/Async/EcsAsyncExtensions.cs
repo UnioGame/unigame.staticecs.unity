@@ -18,16 +18,12 @@ namespace UniGame.StaticEcs.Async
             while (true)
             {
                 if (cancellationToken.IsCancellationRequested)
-                {
                     return false;
-                }
 
                 if (!gid.TryUnpack<TWorld>(out var entity, out var status))
                 {
                     if (status == GIDStatus.NotActual)
-                    {
                         return false;
-                    }
 
                     await UniTask.Yield(PlayerLoopTiming.Update, cancellationToken)
                         .SuppressCancellationThrow();
@@ -35,9 +31,7 @@ namespace UniGame.StaticEcs.Async
                 }
 
                 if (entity.Has<TComponent>())
-                {
                     return true;
-                }
 
                 await UniTask.Yield(PlayerLoopTiming.Update, cancellationToken)
                     .SuppressCancellationThrow();
@@ -50,16 +44,12 @@ namespace UniGame.StaticEcs.Async
             CancellationToken cancellationToken = default)
         {
             if (predicate == null)
-            {
                 return false;
-            }
 
             while (!predicate())
             {
                 if (cancellationToken.IsCancellationRequested)
-                {
                     return false;
-                }
 
                 await UniTask.Yield(PlayerLoopTiming.Update, cancellationToken)
                     .SuppressCancellationThrow();

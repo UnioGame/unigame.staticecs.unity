@@ -41,26 +41,18 @@ namespace UniGame.StaticEcs.Time
                 World<TWorld>.SetResource(time);
             }
 
-            var updateEnabled =
-                World<TWorld>.HasResource<Unity.StaticEcsSystemsConfig>() &&
-                World<TWorld>.GetResource<Unity.StaticEcsSystemsConfig>().update;
             var fixedEnabled =
                 World<TWorld>.HasResource<Unity.StaticEcsSystemsConfig>() &&
                 World<TWorld>.GetResource<Unity.StaticEcsSystemsConfig>().fixedUpdate;
             ref var config = ref World<TWorld>.GetResource<EcsTimeConfig>();
-            if (updateEnabled)
-            {
-                World<TWorld>.Systems<StaticEcsUpdateSystems>.Add(
-                    new EcsTimeUpdateSystem<TWorld>(),
-                    config.UpdateOrder);
-            }
+            World<TWorld>.Systems<StaticEcsUpdateSystems>.Add(
+                new EcsTimeUpdateSystem<TWorld>(),
+                config.UpdateOrder);
 
             if (fixedEnabled && config.RegisterFixed)
-            {
                 World<TWorld>.Systems<StaticEcsFixedUpdateSystems>.Add(
                     new EcsTimeFixedUpdateSystem<TWorld>(),
                     config.FixedOrder);
-            }
 
             return UniTask.CompletedTask;
         }

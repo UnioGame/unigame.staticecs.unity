@@ -20,23 +20,20 @@ namespace UniGame.StaticEcs.Unity {
         where TWorld : struct, IWorldType
         where TResource : struct, IEcsEntityRefResource {
         public static void Apply(World<TWorld>.Entity entity) {
-            if (!World<TWorld>.HasResource<TResource>()) {
+            if (!World<TWorld>.HasResource<TResource>())
                 World<TWorld>.SetResource(default(TResource));
-            }
 
             ref var resource = ref World<TWorld>.GetResource<TResource>();
             resource.Gid = entity.GID;
         }
 
         public static void OnEntityDestroyed(World<TWorld>.Entity entity) {
-            if (!World<TWorld>.HasResource<TResource>()) {
+            if (!World<TWorld>.HasResource<TResource>())
                 return;
-            }
 
             ref var resource = ref World<TWorld>.GetResource<TResource>();
-            if (resource.Gid.Equals(entity.GID)) {
+            if (resource.Gid.Equals(entity.GID))
                 resource.Gid = default;
-            }
         }
     }
 }

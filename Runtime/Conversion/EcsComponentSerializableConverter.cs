@@ -15,8 +15,8 @@ namespace UniGame.StaticEcs.Unity
         {
             entity.Set(Build(host));
         }
-
         /// <summary>Builds the component assigned during conversion.</summary>
         protected abstract TComponent Build(GameObject host);
+
     }
 }

@@ -44,9 +44,7 @@ namespace UniGame.StaticEcs.Unity
         internal static void DestroyRuntimeAsset(StaticEcsFeatureAssetBase runtimeAsset)
         {
             if (runtimeAsset == null)
-            {
                 return;
-            }
 
             if (Application.isPlaying)
             {

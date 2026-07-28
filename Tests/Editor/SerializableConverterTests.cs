@@ -73,13 +73,9 @@ namespace UniGame.StaticEcs.Unity.Tests
                 preset.Apply(entity, null);
 
                 if (entity.Has<PresetValueComponent>())
-                {
                     Assert.That(entity.Read<PresetValueComponent>().Value, Is.EqualTo(20));
-                }
                 else
-                {
                     Assert.Fail("Preset did not add PresetValueComponent.");
-                }
             }
             finally
             {
@@ -109,9 +105,7 @@ namespace UniGame.StaticEcs.Unity.Tests
                     Assert.That(second.Read<PresetValueComponent>().Value, Is.EqualTo(10));
                 }
                 else
-                {
                     Assert.Fail("Preset did not add PresetValueComponent to both entities.");
-                }
             }
             finally
             {
@@ -153,9 +147,7 @@ namespace UniGame.StaticEcs.Unity.Tests
             finally
             {
                 if (host != null)
-                {
                     UnityEngine.Object.DestroyImmediate(host);
-                }
 
                 World<TestSerializableConverterWorld>.Destroy();
             }
@@ -184,9 +176,7 @@ namespace UniGame.StaticEcs.Unity.Tests
             finally
             {
                 if (host != null)
-                {
                     UnityEngine.Object.DestroyImmediate(host);
-                }
 
                 World<TestSerializableConverterWorld>.Destroy();
             }
@@ -221,9 +211,7 @@ namespace UniGame.StaticEcs.Unity.Tests
                     );
                 }
                 else
-                {
                     Assert.Fail("Converter did not add TransformComponent.");
-                }
             }
             finally
             {
@@ -242,10 +230,7 @@ namespace UniGame.StaticEcs.Unity.Tests
             {
                 var entity = World<TestSerializableConverterWorld>.NewEntity<Default>();
                 var converter =
-                    new EcsEntityResourceSerializableConverter<
-                        TestSerializableConverterWorld,
-                        TestEntityResource
-                    >();
+                    new EcsEntityResourceSerializableConverter<TestSerializableConverterWorld, TestEntityResource>();
 
                 converter.Apply(entity, null);
                 Assert.That(

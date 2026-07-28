@@ -57,11 +57,9 @@ namespace UniGame.StaticEcs.Unity
             {
                 Report.stage = EcsStartupStage.CreateFeatures;
                 if (context == null)
-                {
                     throw new ArgumentNullException(
                         nameof(context),
                         "Static ECS initialization requires an application context.");
-                }
 
                 CreateRuntimeFeatures(entries, assemblies);
                 cancellationToken.ThrowIfCancellationRequested();
@@ -92,6 +90,7 @@ namespace UniGame.StaticEcs.Unity
                 var types = World<TWorld>.Types();
                 var activeAssemblies = RegisterFeatureAssemblies(types, assemblies);
                 RegisterClosedGenericTypes(types, activeAssemblies);
+                RegisterFeatureOwnedTypes(types);
                 Report.typesRegistered = true;
 
                 using var startupCancellation =
@@ -167,9 +166,7 @@ namespace UniGame.StaticEcs.Unity
         {
             var count = _runtimeFeatures.Count;
             if (count == 0)
-            {
                 return;
-            }
 
             Report.currentFeature = null;
             Report.stage = EcsStartupStage.InitializeFeatures;
@@ -194,9 +191,7 @@ namespace UniGame.StaticEcs.Unity
                 {
                     var failure = failures[i];
                     if (string.IsNullOrEmpty(failure))
-                    {
                         continue;
-                    }
 
                     Report.currentFeature = failure;
                     break;
@@ -228,9 +223,7 @@ namespace UniGame.StaticEcs.Unity
         public void Update()
         {
             if (!_updateSystemsCreated)
-            {
                 return;
-            }
 
             World<TWorld>.Systems<StaticEcsUpdateSystems>.Update();
         }
@@ -239,36 +232,28 @@ namespace UniGame.StaticEcs.Unity
         public void FixedUpdate()
         {
             if (_fixedSystemsCreated)
-            {
                 World<TWorld>.Systems<StaticEcsFixedUpdateSystems>.Update();
-            }
         }
 
         /// <inheritdoc />
         public void LateUpdate()
         {
             if (_lateSystemsCreated)
-            {
                 World<TWorld>.Systems<StaticEcsLateUpdateSystems>.Update();
-            }
         }
 
         /// <inheritdoc />
         public void CleanupUpdate()
         {
             if (_cleanupSystemsCreated)
-            {
                 World<TWorld>.Systems<StaticEcsCleanupSystems>.Update();
-            }
         }
 
         /// <inheritdoc />
         public void AdvanceTick()
         {
             if (!IsInitialized)
-            {
                 return;
-            }
 
             World<TWorld>.Tick();
             Report.updateCount++;
@@ -303,30 +288,22 @@ namespace UniGame.StaticEcs.Unity
             HashSet<Assembly> assemblies)
         {
             if (entries == null)
-            {
                 return;
-            }
 
             var assets = new HashSet<StaticEcsFeatureAssetBase>();
             for (var i = 0; i < entries.Count; i++)
             {
                 var entry = entries[i];
                 if (entry == null || !entry.IsEnabled || entry.asset == null)
-                {
                     continue;
-                }
 
                 var asset = entry.asset;
                 if (!assets.Add(asset))
-                {
                     throw new InvalidOperationException($"Feature asset `{asset.name}` is listed more than once.");
-                }
 
                 if (asset.WorldType != typeof(TWorld))
-                {
                     throw new InvalidOperationException(
                         $"Feature asset `{asset.name}` targets `{asset.WorldType.Name}`, expected `{typeof(TWorld).Name}`.");
-                }
 
                 Report.currentFeature = asset.FeatureName;
                 var runtimeAsset = asset.CreateRuntimeAsset();
@@ -366,9 +343,7 @@ namespace UniGame.StaticEcs.Unity
             HashSet<Assembly> assemblySet)
         {
             if (assemblySet.Count == 0)
-            {
                 return Array.Empty<Assembly>();
-            }
 
             var assemblies = new Assembly[assemblySet.Count];
             assemblySet.CopyTo(assemblies);
@@ -400,32 +375,39 @@ namespace UniGame.StaticEcs.Unity
                 {
                     if (!typeof(IStaticEcsTypeRegistrar<TWorld>)
                             .IsAssignableFrom(attribute.RegistrarType))
-                    {
                         continue;
-                    }
 
                     if (registrarType != null)
-                    {
                         throw new InvalidOperationException(
                             $"Assembly `{assemblies[assemblyIndex].GetName().Name}` declares " +
                             $"more than one Static ECS type registrar for " +
                             $"`{typeof(TWorld).FullName}`: `{registrarType.FullName}` and " +
                             $"`{attribute.RegistrarType.FullName}`.");
-                    }
 
                     registrarType = attribute.RegistrarType;
                     var registrar = Activator.CreateInstance(
                         attribute.RegistrarType,
                         nonPublic: true) as IStaticEcsTypeRegistrar<TWorld>;
                     if (registrar == null)
-                    {
                         throw new InvalidOperationException(
                             $"Unable to create Static ECS type registrar " +
                             $"`{attribute.RegistrarType.FullName}`.");
-                    }
 
                     registrar.Register(types);
                 }
+            }
+        }
+
+        private void RegisterFeatureOwnedTypes(World<TWorld>.TypeRegistrar types)
+        {
+            for (var featureIndex = 0; featureIndex < _runtimeFeatures.Count; featureIndex++)
+            {
+                var feature = _runtimeFeatures[featureIndex];
+                if (feature is not IStaticEcsFeatureTypeRegistrar<TWorld> registrar)
+                    continue;
+
+                Report.currentFeature = feature.FeatureName;
+                registrar.RegisterTypes(types);
             }
         }
 
@@ -467,24 +449,16 @@ namespace UniGame.StaticEcs.Unity
         private void InitializeSystems()
         {
             if (_updateSystemsCreated)
-            {
                 World<TWorld>.Systems<StaticEcsUpdateSystems>.Initialize();
-            }
 
             if (_fixedSystemsCreated)
-            {
                 World<TWorld>.Systems<StaticEcsFixedUpdateSystems>.Initialize();
-            }
 
             if (_lateSystemsCreated)
-            {
                 World<TWorld>.Systems<StaticEcsLateUpdateSystems>.Initialize();
-            }
 
             if (_cleanupSystemsCreated)
-            {
                 World<TWorld>.Systems<StaticEcsCleanupSystems>.Initialize();
-            }
 
             Report.systemsInitialized = true;
         }
@@ -502,9 +476,7 @@ namespace UniGame.StaticEcs.Unity
             var lifeTime = _worldLifeTime;
             _worldLifeTime = null;
             if (lifeTime != null)
-            {
                 TryCleanup("world lifetime", reason, lifeTime.Terminate);
-            }
         }
 
         private void DestroySystems(string reason)
@@ -599,12 +571,10 @@ namespace UniGame.StaticEcs.Unity
             }
 
             if (World<TWorld>.Status == WorldStatus.Initialized)
-            {
                 TryCleanup(
                     $"world `{typeof(TWorld).Name}`",
                     reason,
                     static () => World<TWorld>.Destroy());
-            }
         }
 
         private static void TryCleanup(

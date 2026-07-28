@@ -33,9 +33,7 @@ namespace UniGame.StaticEcs.Editor.View.Tabs
             {
                 EditorGUILayout.LabelField($"Service sources: {_sources.Count}", EditorStyles.boldLabel);
                 if (GUILayout.Button("Refresh", GUILayout.Width(80)))
-                {
                     RefreshSources();
-                }
             }
 
             if (_sources.Count == 0)
@@ -55,9 +53,7 @@ namespace UniGame.StaticEcs.Editor.View.Tabs
         private static void DrawSource(ScriptableObject source)
         {
             if (source == null)
-            {
                 return;
-            }
 
             using (new EditorGUILayout.VerticalScope(EditorStyles.helpBox))
             {
@@ -65,9 +61,7 @@ namespace UniGame.StaticEcs.Editor.View.Tabs
                 {
                     EditorGUILayout.LabelField(source.name, EditorStyles.boldLabel);
                     if (GUILayout.Button("Select", GUILayout.Width(60)))
-                    {
                         Selection.activeObject = source;
-                    }
                 }
 
                 var serialized = new SerializedObject(source);
@@ -82,9 +76,7 @@ namespace UniGame.StaticEcs.Editor.View.Tabs
                     {
                         EditorGUILayout.LabelField($"{(enabled ? "●" : "○")} {(asset == null ? "(missing feature)" : asset.FeatureName)}");
                         if (asset != null && GUILayout.Button("Ping", GUILayout.Width(60)))
-                        {
                             EditorGUIUtility.PingObject(asset);
-                        }
                     }
                 }
             }
@@ -98,9 +90,7 @@ namespace UniGame.StaticEcs.Editor.View.Tabs
             {
                 var source = AssetDatabase.LoadMainAssetAtPath(AssetDatabase.GUIDToAssetPath(guid)) as ScriptableObject;
                 if (source != null)
-                {
                     _sources.Add(source);
-                }
             }
         }
     }

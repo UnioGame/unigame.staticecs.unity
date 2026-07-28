@@ -41,9 +41,7 @@ namespace UniGame.StaticEcs.Editor.View.Tabs
                 EditorGUILayout.LabelField("Filter", GUILayout.Width(50));
                 _filter = EditorGUILayout.TextField(_filter);
                 if (GUILayout.Button("Refresh", GUILayout.Width(80)))
-                {
                     RefreshCatalog();
-                }
             }
 
             EditorGUILayout.LabelField(
@@ -69,9 +67,7 @@ namespace UniGame.StaticEcs.Editor.View.Tabs
             foreach (var type in types)
             {
                 if (!Match(type))
-                {
                     continue;
-                }
 
                 using (new EditorGUILayout.HorizontalScope(EditorStyles.helpBox))
                 {
@@ -85,9 +81,7 @@ namespace UniGame.StaticEcs.Editor.View.Tabs
         private bool Match(Type type)
         {
             if (string.IsNullOrEmpty(_filter))
-            {
                 return true;
-            }
 
             return type.FullName != null && type.FullName.IndexOf(_filter, StringComparison.OrdinalIgnoreCase) >= 0;
         }
@@ -113,14 +107,10 @@ namespace UniGame.StaticEcs.Editor.View.Tabs
                 foreach (var type in types)
                 {
                     if (type == null || type.IsAbstract || type.IsInterface)
-                    {
                         continue;
-                    }
 
                     if (!featureContract.IsAssignableFrom(type))
-                    {
                         continue;
-                    }
 
                     _featureTypes.Add(type);
                 }

@@ -77,9 +77,7 @@ namespace UniGame.StaticEcs.Unity {
 #else
             var milliseconds = playerDependencyTimeoutMs;
             if (milliseconds <= 0)
-            {
                 milliseconds = 10000;
-            }
 #endif
             return TimeSpan.FromMilliseconds(milliseconds);
         }

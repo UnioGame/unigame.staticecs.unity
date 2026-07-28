@@ -151,6 +151,33 @@ namespace UniGame.StaticEcs.Unity.Tests
         }
 
         [Test]
+        public void ActiveFeatureCanRegisterOwnedClosedGenericTypes()
+        {
+            var asset =
+                ScriptableObject.CreateInstance<FeatureOwnedRegistrationAsset>();
+            var service = CreateService<RegistrationWorld>();
+            try
+            {
+                using var context = new EntityContext();
+                service.InitializeAsync(
+                        Entries(asset),
+                        context,
+                        CancellationToken.None)
+                    .GetAwaiter()
+                    .GetResult();
+
+                var entity = World<RegistrationWorld>.NewEntity<Default>();
+                Assert.DoesNotThrow(() =>
+                    entity.Add<ClosedGenericComponent<long>>());
+            }
+            finally
+            {
+                service.Dispose();
+                Object.DestroyImmediate(asset);
+            }
+        }
+
+        [Test]
         public void DisabledFeatureAssemblyIsNotScannedOrInitialized()
         {
             var asset = ScriptableObject.CreateInstance<DisabledFeatureAsset>();
@@ -207,9 +234,7 @@ namespace UniGame.StaticEcs.Unity.Tests
                 World<TWorld>.Destroy(withHooks: false);
             }
             else if (World<TWorld>.Status == WorldStatus.Initialized)
-            {
                 World<TWorld>.Destroy();
-            }
         }
 
         private static IEnumerable<Type> GetLoadableTypes(Assembly assembly)
@@ -259,15 +284,29 @@ namespace UniGame.StaticEcs.Unity.Tests
         }
     }
 
+    public sealed class FeatureOwnedRegistrationAsset :
+        StaticEcsFeatureAsset<RegistrationWorld>,
+        IStaticEcsFeatureTypeRegistrar<RegistrationWorld>
+    {
+        public void RegisterTypes(
+            World<RegistrationWorld>.TypeRegistrar types)
+        {
+            types.Component<ClosedGenericComponent<long>>();
+        }
+
+        protected override UniTask OnInitializeAsync(ILifeTime lifeTime)
+        {
+            return UniTask.CompletedTask;
+        }
+    }
+
     public sealed class DerivedRegistrationFeature :
         ProgrammaticFeatureBase
     {
     }
 
     public sealed class DerivedRegistrationFeatureAsset :
-        StaticEcsFeatureAsset<
-            ProgrammaticFeatureWorld,
-            DerivedRegistrationFeature>
+        StaticEcsFeatureAsset<ProgrammaticFeatureWorld, DerivedRegistrationFeature>
     {
     }
 

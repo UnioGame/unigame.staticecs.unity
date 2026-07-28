@@ -23,30 +23,25 @@ namespace UniGame.StaticEcs.Unity {
 
         /// <summary>Starts each enabled loop once; repeated calls are ignored.</summary>
         public void Start() {
-            if (_started || !_lifeTime.IsAlive) {
+            if (_started || !_lifeTime.IsAlive)
                 return;
-            }
 
             _started = true;
             var token = _service.LifeTime.Token;
-            if (_config.update) {
+            if (_config.update)
                 RunAsync("Update", _service.Update, _config.updateTiming, token).Forget();
-            }
 
-            if (_config.fixedUpdate) {
+            if (_config.fixedUpdate)
                 RunAsync("FixedUpdate", _service.FixedUpdate, _config.fixedUpdateTiming, token)
                     .Forget();
-            }
 
-            if (_config.lateUpdate) {
+            if (_config.lateUpdate)
                 RunAsync("LateUpdate", _service.LateUpdate, _config.lateUpdateTiming, token)
                     .Forget();
-            }
 
-            if (_config.cleanup) {
+            if (_config.cleanup)
                 RunAsync("Cleanup", _service.CleanupUpdate, _config.cleanupTiming, token)
                     .Forget();
-            }
 
             RunAsync("WorldTick", _service.AdvanceTick, _config.tickTiming, token).Forget();
         }

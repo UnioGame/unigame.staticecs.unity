@@ -25,4 +25,15 @@ namespace UniGame.StaticEcs.Unity
         /// <summary>Registers the assembly-owned closed generic ECS types.</summary>
         void Register(World<TWorld>.TypeRegistrar types);
     }
+
+    /// <summary>
+    /// Registers configuration-derived ECS types owned by a runtime feature asset before
+    /// the world is initialized.
+    /// </summary>
+    public interface IStaticEcsFeatureTypeRegistrar<TWorld>
+        where TWorld : struct, IWorldType
+    {
+        /// <summary>Registers the feature-owned types required by its serialized configuration.</summary>
+        void RegisterTypes(World<TWorld>.TypeRegistrar types);
+    }
 }
