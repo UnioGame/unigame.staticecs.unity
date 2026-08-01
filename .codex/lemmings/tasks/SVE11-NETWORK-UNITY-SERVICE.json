@@ -1,0 +1,87 @@
+{
+  "schemaVersion": 1,
+  "taskId": "SVE11-NETWORK-UNITY-SERVICE",
+  "mode": "strict",
+  "state": "Ready",
+  "previousState": "Planned",
+  "role": "complex-worker",
+  "branch": "codex/sve11-unity-service-worker",
+  "worktree": "D:/Dev/kontora/static.ecs.template/GameClient/Game.Packages/lemmings-worktrees/sve11-unity-service",
+  "plan": {
+    "goal": "Implement the frozen multi-world EcsService and registry contract without changing runner or feature composition policy.",
+    "acceptance": [
+      "Implement every behavior in .codex/lemmings/contracts/SVE11-network-unity-service.md.",
+      "Preserve source compatibility for Active, LastReport, Register and Unregister.",
+      "Add focused EditMode tests for registry and service lifecycle behavior.",
+      "Add English XML summaries for every new public member.",
+      "Create one candidate commit and report exact validation evidence."
+    ],
+    "dependencies": [
+      ".codex/lemmings/contracts/SVE11-network-unity-service.md"
+    ]
+  },
+  "ownership": {
+    "owned": [
+      "Runtime/Service/IEcsService.cs",
+      "Runtime/Service/EcsService.cs",
+      "Runtime/Service/EcsServiceRegistry.cs",
+      "Tests/Editor/EcsServiceRegistryTests.cs",
+      "Tests/Editor/EcsServiceRegistryTests.cs.meta"
+    ],
+    "shared": [],
+    "forbidden": [
+      ".codex/**",
+      "Runtime/Service/EcsRunner.cs",
+      "Runtime/Bootstrap/**",
+      "Runtime/Features/**"
+    ]
+  },
+  "models": {
+    "requested": null,
+    "assigned": "gpt-5.6-sol:medium",
+    "actual": null
+  },
+  "execution": {
+    "handoff": null,
+    "validationEvidence": []
+  },
+  "baseSha": "a00a0c9",
+  "commits": {
+    "candidate": null,
+    "fix": []
+  },
+  "validation": {
+    "riskToTest": [
+      {
+        "risk": "A server registration hides the Main client service",
+        "test": "Main priority and two-world lookup tests"
+      },
+      {
+        "risk": "Duplicate or stale services corrupt registry ownership",
+        "test": "Conflict, idempotence, stale unregister and fallback-order tests"
+      },
+      {
+        "risk": "Failed reinitialization leaves a dead registered service",
+        "test": "Failure rollback and disposal lifecycle tests"
+      }
+    ],
+    "commands": [
+      "git diff --check",
+      "Unity EditMode: unigame.staticecs.unity.tests"
+    ],
+    "allowedOutputs": [],
+    "debt": []
+  },
+  "review": {
+    "taskId": "SVE11-NETWORK-UNITY-SERVICE",
+    "base": null,
+    "status": "Pending",
+    "cycle": 0,
+    "head": null,
+    "evidence": null
+  },
+  "close": {
+    "mergeCommit": null,
+    "integrationValidationPassed": false
+  }
+}
