@@ -23,7 +23,6 @@ namespace UniGame.StaticEcs.Unity
         private bool _fixedSystemsCreated;
         private bool _lateSystemsCreated;
         private bool _cleanupSystemsCreated;
-        private bool _registered;
 
         /// <summary>Creates an uninitialized ECS service.</summary>
         public EcsService(StaticEcsWorldConfig worldConfig, StaticEcsSystemsConfig systemsConfig)
@@ -35,6 +34,9 @@ namespace UniGame.StaticEcs.Unity
 
         /// <inheritdoc />
         public EcsStartupReport Report { get; }
+
+        /// <inheritdoc />
+        public Type WorldType => typeof(TWorld);
 
         /// <summary>Gets the lifetime owned by this service.</summary>
         public ILifeTime LifeTime => _lifeTime;
@@ -48,6 +50,7 @@ namespace UniGame.StaticEcs.Unity
             IContext context,
             CancellationToken cancellationToken)
         {
+            UnregisterService();
             TeardownWorld("reinitialization");
 
             ResetReport();
@@ -123,7 +126,6 @@ namespace UniGame.StaticEcs.Unity
                 Report.message =
                     $"Static ECS world `{typeof(TWorld).Name}` initialized. Features: {_runtimeFeatures.Count}.";
                 EcsServiceRegistry.Register(this);
-                _registered = true;
             }
             catch (Exception exception)
             {
@@ -132,6 +134,7 @@ namespace UniGame.StaticEcs.Unity
                 Report.message =
                     $"Static ECS startup failed during {Report.stage} for `{Report.currentFeature ?? "world"}`: " +
                     exception.Message;
+                UnregisterService();
                 TeardownWorld("startup rollback");
 
                 throw;
@@ -271,16 +274,14 @@ namespace UniGame.StaticEcs.Unity
         /// <inheritdoc />
         public void Dispose()
         {
+            UnregisterService();
             TryCleanup("service lifetime", "service disposal", _lifeTime.Terminate);
             TeardownWorld("service disposal");
-            if (_registered)
-            {
-                TryCleanup(
-                    "service registry",
-                    "service disposal",
-                    () => EcsServiceRegistry.Unregister(this));
-                _registered = false;
-            }
+        }
+
+        private void UnregisterService()
+        {
+            EcsServiceRegistry.Unregister(this);
         }
 
         private void CreateRuntimeFeatures(
