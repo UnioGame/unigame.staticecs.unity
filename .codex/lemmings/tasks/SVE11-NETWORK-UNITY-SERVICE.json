@@ -2,10 +2,10 @@
   "schemaVersion": 1,
   "taskId": "SVE11-NETWORK-UNITY-SERVICE",
   "mode": "strict",
-  "state": "Ready",
-  "previousState": "Planned",
+  "state": "Candidate",
+  "previousState": "Active",
   "role": "complex-worker",
-  "branch": "codex/sve11-unity-service-worker",
+  "branch": "codex/sve11-unity-service-candidate",
   "worktree": "D:/Dev/kontora/static.ecs.template/GameClient/Game.Packages/lemmings-worktrees/sve11-unity-service",
   "plan": {
     "goal": "Implement the frozen multi-world EcsService and registry contract without changing runner or feature composition policy.",
@@ -39,15 +39,20 @@
   "models": {
     "requested": null,
     "assigned": "gpt-5.6-sol:medium",
-    "actual": null
+    "actual": "gpt-5.6-sol:medium"
   },
   "execution": {
-    "handoff": null,
-    "validationEvidence": []
+    "handoff": "Candidate implements exact-world service registration with Main-priority compatibility and lifecycle-safe unregister semantics.",
+    "validationEvidence": [
+      "git diff --check 2884f158fd47b86f53ae97f3f2490e0310682842..bd1c14bea93f62c703794560ad0fbb7829660114: passed",
+      "Roslyn overlay compile for IEcsService and EcsServiceRegistry against Unity references: passed; baseline duplicate-type warnings only",
+      "Worktree clean and candidate changes limited to frozen-owned files",
+      "Deferred integration gate: Unity EditMode UniGame.StaticEcs.Unity.Tests.EcsServiceRegistryTests"
+    ]
   },
-  "baseSha": "a00a0c9",
+  "baseSha": "2884f158fd47b86f53ae97f3f2490e0310682842",
   "commits": {
-    "candidate": null,
+    "candidate": "bd1c14bea93f62c703794560ad0fbb7829660114",
     "fix": []
   },
   "validation": {
@@ -74,10 +79,10 @@
   },
   "review": {
     "taskId": "SVE11-NETWORK-UNITY-SERVICE",
-    "base": null,
+    "base": "2884f158fd47b86f53ae97f3f2490e0310682842",
     "status": "Pending",
     "cycle": 0,
-    "head": null,
+    "head": "bd1c14bea93f62c703794560ad0fbb7829660114",
     "evidence": null
   },
   "close": {
