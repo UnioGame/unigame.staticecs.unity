@@ -140,7 +140,7 @@ namespace UniGame.StaticEcs.Unity.Tests
                     CancellationToken.None);
                 cancellation.Cancel();
 
-                Assert.ThrowsAsync<OperationCanceledException>(async () =>
+                Assert.CatchAsync<OperationCanceledException>(async () =>
                     await service.InitializeAsync(
                         Array.Empty<StaticEcsFeatureEntry>(),
                         context,
