@@ -1,0 +1,17 @@
+{
+  "schemaVersion": 1,
+  "taskId": "SVE11-NETWORK-UNITY-SERVICE",
+  "base": "2884f158fd47b86f53ae97f3f2490e0310682842",
+  "head": "2c75a1e324bcea133c2d6a1501fb8f1d9c3c3d6f",
+  "status": "Accepted",
+  "reviewerModel": "gpt-5.6-sol:high",
+  "findings": [],
+  "validation": [
+    "Exact base/head and previous-candidate ancestry verified; worktree clean",
+    "Incremental fix is one commit and one test-line change from ThrowsAsync to CatchAsync for OperationCanceledException",
+    "CatchAsync accepts TaskCanceledException while unrelated exception types still fail and lifecycle assertions still execute",
+    "Full range ownership remains three service files plus focused test/meta",
+    "git diff --check passed for the incremental range",
+    "Pre-fix Unity MCP evidence was 7 total, 6 passed, with the sole exact-exception-type failure addressed by this fix"
+  ]
+}

@@ -47,13 +47,16 @@
       "git diff --check 2884f158fd47b86f53ae97f3f2490e0310682842..bd1c14bea93f62c703794560ad0fbb7829660114: passed",
       "Roslyn overlay compile for IEcsService and EcsServiceRegistry against Unity references: passed; baseline duplicate-type warnings only",
       "Worktree clean and candidate changes limited to frozen-owned files",
-      "Deferred integration gate: Unity EditMode UniGame.StaticEcs.Unity.Tests.EcsServiceRegistryTests"
+      "Unity MCP pre-fix EditMode run: 7 total, 6 passed, sole failure was exact exception matching for TaskCanceledException",
+      "Deferred integration gate: rerun Unity EditMode UniGame.StaticEcs.Unity.Tests.EcsServiceRegistryTests after integrating accepted fix"
     ]
   },
   "baseSha": "2884f158fd47b86f53ae97f3f2490e0310682842",
   "commits": {
     "candidate": "bd1c14bea93f62c703794560ad0fbb7829660114",
-    "fix": []
+    "fix": [
+      "2c75a1e324bcea133c2d6a1501fb8f1d9c3c3d6f"
+    ]
   },
   "validation": {
     "riskToTest": [
@@ -81,9 +84,9 @@
     "taskId": "SVE11-NETWORK-UNITY-SERVICE",
     "base": "2884f158fd47b86f53ae97f3f2490e0310682842",
     "status": "Accepted",
-    "cycle": 1,
-    "head": "bd1c14bea93f62c703794560ad0fbb7829660114",
-    "evidence": ".codex/lemmings/reviews/SVE11-NETWORK-UNITY-SERVICE.bd1c14bea93f62c703794560ad0fbb7829660114.json"
+    "cycle": 2,
+    "head": "2c75a1e324bcea133c2d6a1501fb8f1d9c3c3d6f",
+    "evidence": ".codex/lemmings/reviews/SVE11-NETWORK-UNITY-SERVICE.2c75a1e324bcea133c2d6a1501fb8f1d9c3c3d6f.json"
   },
   "close": {
     "mergeCommit": null,
