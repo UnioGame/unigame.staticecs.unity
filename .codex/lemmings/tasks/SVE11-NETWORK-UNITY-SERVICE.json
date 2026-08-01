@@ -2,8 +2,8 @@
   "schemaVersion": 1,
   "taskId": "SVE11-NETWORK-UNITY-SERVICE",
   "mode": "strict",
-  "state": "Accepted",
-  "previousState": "Candidate",
+  "state": "Integrated",
+  "previousState": "Accepted",
   "role": "complex-worker",
   "branch": "codex/sve11-unity-service-candidate",
   "worktree": "D:/Dev/kontora/static.ecs.template/GameClient/Game.Packages/lemmings-worktrees/sve11-unity-service",
@@ -48,7 +48,7 @@
       "Roslyn overlay compile for IEcsService and EcsServiceRegistry against Unity references: passed; baseline duplicate-type warnings only",
       "Worktree clean and candidate changes limited to frozen-owned files",
       "Unity MCP pre-fix EditMode run: 7 total, 6 passed, sole failure was exact exception matching for TaskCanceledException",
-      "Deferred integration gate: rerun Unity EditMode UniGame.StaticEcs.Unity.Tests.EcsServiceRegistryTests after integrating accepted fix"
+      "Unity MCP post-fix EditMode run: 7 total, 7 passed, 0 failed in 0.98 seconds"
     ]
   },
   "baseSha": "2884f158fd47b86f53ae97f3f2490e0310682842",
@@ -89,7 +89,7 @@
     "evidence": ".codex/lemmings/reviews/SVE11-NETWORK-UNITY-SERVICE.2c75a1e324bcea133c2d6a1501fb8f1d9c3c3d6f.json"
   },
   "close": {
-    "mergeCommit": null,
-    "integrationValidationPassed": false
+    "mergeCommit": "1e1ce21a0c1d50672fe37d19fda92a4966afb2c8",
+    "integrationValidationPassed": true
   }
 }

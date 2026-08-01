@@ -13,7 +13,12 @@
     "evidence": ".codex/lemmings/reviews/SVE11-NETWORK-UNITY-SERVICE-V1.baseline.json"
   },
   "close": {
-    "mergeCommits": [],
-    "phaseValidation": []
+    "mergeCommits": [
+      "1e1ce21a0c1d50672fe37d19fda92a4966afb2c8"
+    ],
+    "phaseValidation": [
+      "Unity MCP recompile completed without errors",
+      "UniGame.StaticEcs.Unity.Tests.EcsServiceRegistryTests: 7 passed, 0 failed"
+    ]
   }
 }
