@@ -2,8 +2,8 @@
   "schemaVersion": 1,
   "taskId": "SVE11-NETWORK-UNITY-SERVICE",
   "mode": "strict",
-  "state": "Candidate",
-  "previousState": "Active",
+  "state": "Accepted",
+  "previousState": "Candidate",
   "role": "complex-worker",
   "branch": "codex/sve11-unity-service-candidate",
   "worktree": "D:/Dev/kontora/static.ecs.template/GameClient/Game.Packages/lemmings-worktrees/sve11-unity-service",
@@ -80,10 +80,10 @@
   "review": {
     "taskId": "SVE11-NETWORK-UNITY-SERVICE",
     "base": "2884f158fd47b86f53ae97f3f2490e0310682842",
-    "status": "Pending",
-    "cycle": 0,
+    "status": "Accepted",
+    "cycle": 1,
     "head": "bd1c14bea93f62c703794560ad0fbb7829660114",
-    "evidence": null
+    "evidence": ".codex/lemmings/reviews/SVE11-NETWORK-UNITY-SERVICE.bd1c14bea93f62c703794560ad0fbb7829660114.json"
   },
   "close": {
     "mergeCommit": null,
