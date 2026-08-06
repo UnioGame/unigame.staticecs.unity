@@ -36,7 +36,7 @@ namespace UniGame.StaticEcs.Unity
 
             using var timeoutCancellation =
                 CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
-            timeoutCancellation.CancelAfterSlim(timeout);
+            using var timeoutTimer = timeoutCancellation.CancelAfterSlim(timeout);
             try
             {
                 await UniTask.WaitWhile(

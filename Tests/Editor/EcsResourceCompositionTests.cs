@@ -29,7 +29,7 @@ namespace UniGame.StaticEcs.Unity.Tests
             World<ResourceWorld>.Create(WorldConfig.Default());
             World<ResourceWorld>.Resource<FirstResource> handle = default;
             var pending = handle.GetAsync(
-                TimeSpan.FromSeconds(1),
+                TimeSpan.FromMilliseconds(50),
                 CancellationToken.None);
 
             await UniTask.Yield();
@@ -38,6 +38,10 @@ namespace UniGame.StaticEcs.Unity.Tests
 
             var result = await pending;
             Assert.AreEqual(42, result.Value);
+
+            // Advance beyond the original timeout. A disposed timeout source must not
+            // remain scheduled in the UniTask player loop after successful completion.
+            await UniTask.Delay(TimeSpan.FromMilliseconds(75));
         }
 
         [Test]
@@ -78,6 +82,31 @@ namespace UniGame.StaticEcs.Unity.Tests
                 await handle.GetAsync(
                     TimeSpan.FromSeconds(1),
                     cancellation.Token));
+        }
+
+        [Test]
+        public async UniTask ResourceHandleGetAsyncDisposesTimerAfterExternalCancellation()
+        {
+            World<ResourceWorld>.Create(WorldConfig.Default());
+            World<ResourceWorld>.Resource<SecondResource> handle = default;
+            using var cancellation = new CancellationTokenSource();
+            var pending = handle.GetAsync(
+                TimeSpan.FromMilliseconds(100),
+                cancellation.Token);
+
+            await UniTask.Yield();
+            cancellation.Cancel();
+
+            try
+            {
+                await pending;
+                Assert.Fail("The resource wait was expected to be cancelled.");
+            }
+            catch (OperationCanceledException)
+            {
+            }
+
+            await UniTask.Delay(TimeSpan.FromMilliseconds(125));
         }
 
         [Test]
