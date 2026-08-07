@@ -20,6 +20,21 @@ namespace UniGame.StaticEcs.Unity {
 
         public IReadOnlyList<IEcsConverter<TWorld>> RuntimeConverters => _runtime;
 
+        /// <summary>Collects enabled converters and validates their creation prerequisites.</summary>
+        public bool CanCreate(out string reason) {
+            CollectConverters();
+            for (var i = 0; i < _runtime.Count; i++) {
+                var converter = _runtime[i];
+                if (converter == null || !converter.IsEnabled)
+                    continue;
+                if (converter is IEcsConverterDependency<TWorld> dependency &&
+                    !dependency.IsReady(gameObject, out reason))
+                    return false;
+            }
+            reason = string.Empty;
+            return true;
+        }
+
         public void RegisterRuntime(IEcsConverter<TWorld> converter) {
             if (converter == null || _registered.Contains(converter))
                 return;
@@ -55,13 +70,17 @@ namespace UniGame.StaticEcs.Unity {
         }
 
         public override bool CreateEntity() {
+            if (World<TWorld>.Status != WorldStatus.Initialized)
+                return false;
+            if (entityGid.Status<TWorld>() == GIDStatus.Active)
+                return false;
+            if (!CanCreate(out _))
+                return false;
             if (!base.CreateEntity())
                 return false;
 
             if (!entityGid.TryUnpack<TWorld>(out var entity))
                 return true;
-
-            CollectConverters();
 
             for (var i = 0; i < _runtime.Count; i++) {
                 var c = _runtime[i];
@@ -70,6 +89,31 @@ namespace UniGame.StaticEcs.Unity {
                 c.Apply(entity, gameObject);
             }
 
+            return true;
+        }
+
+        /// <summary>Runs converter teardown, destroys the entity exactly once, and clears its GID.</summary>
+        public bool DestroyEntity() {
+            _pendingDeferredCreate = false;
+            if (World<TWorld>.Status != WorldStatus.Initialized ||
+                entityGid.Status<TWorld>() != GIDStatus.Active ||
+                !entityGid.TryUnpack<TWorld>(out var entity)) {
+                entityGid = default;
+                ClearRuntime();
+                return false;
+            }
+
+            for (var i = 0; i < _runtime.Count; i++) {
+                var converter = _runtime[i];
+                if (converter == null || !converter.IsEnabled)
+                    continue;
+                if (converter is IEcsConverterDestroyHandler<TWorld> handler)
+                    handler.OnEntityDestroyed(entity, gameObject);
+            }
+
+            entity.Destroy();
+            entityGid = default;
+            ClearRuntime();
             return true;
         }
 
@@ -91,26 +135,12 @@ namespace UniGame.StaticEcs.Unity {
         }
 
         private new void OnDestroy() {
-            if (World<TWorld>.Status == WorldStatus.Initialized
-                && entityGid.Status<TWorld>() == GIDStatus.Active
-                && entityGid.TryUnpack<TWorld>(out var entity))
-                for (var i = 0; i < _runtime.Count; i++) {
-                    var converter = _runtime[i];
-                    if (converter == null || !converter.IsEnabled)
-                        continue;
-
-                    if (converter is IEcsConverterDestroyHandler<TWorld> h)
-                        h.OnEntityDestroyed(entity, gameObject);
-                }
-
-            if (onDestroyType == OnDestroyType.DestroyEntity
-                && World<TWorld>.Status == WorldStatus.Initialized
-                && entityGid.Status<TWorld>() == GIDStatus.Active)
-                entityGid.Unpack<TWorld>().Destroy();
-
-            entityGid = default;
-            _runtime.Clear();
-            _monoBuf.Clear();
+            if (onDestroyType == OnDestroyType.DestroyEntity)
+                DestroyEntity();
+            else {
+                entityGid = default;
+                ClearRuntime();
+            }
         }
 
         private void CollectConverters() {
@@ -140,6 +170,11 @@ namespace UniGame.StaticEcs.Unity {
                 var c = _registered[i];
                 if (c != null) _runtime.Add(c);
             }
+        }
+
+        private void ClearRuntime() {
+            _runtime.Clear();
+            _monoBuf.Clear();
         }
     }
 }

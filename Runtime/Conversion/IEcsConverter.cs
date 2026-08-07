@@ -17,4 +17,11 @@ namespace UniGame.StaticEcs.Unity {
         where TWorld : struct, IWorldType {
         void ResolveLinks(World<TWorld>.Entity entity, GameObject host);
     }
+
+    /// <summary>Declares a prerequisite that must be ready before an entity is created.</summary>
+    public interface IEcsConverterDependency<TWorld>
+        where TWorld : struct, IWorldType {
+        /// <summary>Returns whether the converter can be applied without creating a partial entity.</summary>
+        bool IsReady(GameObject host, out string reason);
+    }
 }
