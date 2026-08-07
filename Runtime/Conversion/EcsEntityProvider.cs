@@ -1,4 +1,6 @@
+using System;
 using System.Collections.Generic;
+using System.Runtime.ExceptionServices;
 using FFS.Libraries.StaticEcs;
 using FFS.Libraries.StaticEcs.Unity;
 using UnityEngine;
@@ -82,11 +84,22 @@ namespace UniGame.StaticEcs.Unity {
             if (!entityGid.TryUnpack<TWorld>(out var entity))
                 return true;
 
-            for (var i = 0; i < _runtime.Count; i++) {
-                var c = _runtime[i];
-                if (c == null || !c.IsEnabled)
-                    continue;
-                c.Apply(entity, gameObject);
+            try {
+                for (var i = 0; i < _runtime.Count; i++) {
+                    var c = _runtime[i];
+                    if (c == null || !c.IsEnabled)
+                        continue;
+                    c.Apply(entity, gameObject);
+                }
+            }
+            catch {
+                try {
+                    DestroyEntity();
+                }
+                catch {
+                    // Preserve the converter exception while best-effort teardown already cleared ownership.
+                }
+                throw;
             }
 
             return true;
@@ -103,17 +116,33 @@ namespace UniGame.StaticEcs.Unity {
                 return false;
             }
 
+            Exception failure = null;
             for (var i = 0; i < _runtime.Count; i++) {
                 var converter = _runtime[i];
-                if (converter == null || !converter.IsEnabled)
+                if (converter == null || !converter.IsEnabled ||
+                    converter is not IEcsConverterDestroyHandler<TWorld> handler)
                     continue;
-                if (converter is IEcsConverterDestroyHandler<TWorld> handler)
+                try {
                     handler.OnEntityDestroyed(entity, gameObject);
+                }
+                catch (Exception exception) {
+                    failure ??= exception;
+                }
             }
 
-            entity.Destroy();
-            entityGid = default;
-            ClearRuntime();
+            try {
+                entity.Destroy();
+            }
+            catch (Exception exception) {
+                failure ??= exception;
+            }
+            finally {
+                entityGid = default;
+                ClearRuntime();
+            }
+
+            if (failure != null)
+                ExceptionDispatchInfo.Capture(failure).Throw();
             return true;
         }
 
