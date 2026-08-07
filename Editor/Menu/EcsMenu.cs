@@ -3,7 +3,7 @@ using UnityEditor;
 
 namespace UniGame.StaticEcs.Editor.Menu {
     public static class EcsMenu {
-        private const string Root = "UniGame/Static ECS/";
+        private const string Root = "Game/Static ECS/";
 
         [MenuItem(Root + "Fix Broken Providers", priority = 200)]
         public static void OpenBrokenProvidersFixer() {
