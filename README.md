@@ -1,10 +1,10 @@
-# UniGame Static ECS Unity
+# Static ECS Unity
 
 ## Capabilities
 
 This package owns the default `Main` world, feature assets, Unity authoring,
 converters, presets, player-loop runners, automatic type discovery, asynchronous
-resource access, rollback, and repeated initialization.
+resource access, centralized provider authoring, rollback, and repeated initialization.
 
 Startup runs in this order:
 
@@ -114,6 +114,37 @@ var customWorldContext = StaticEcsContext.Get<TWorld>();
 
 Runtime code should read the typed ECS Resources that initialization publishes,
 not query the context on every tick.
+
+### Centralized entity authoring
+
+`EcsEntityProvider<TWorld>` keeps the normal serialized converter surface while delegating
+ECS mutation to `EcsAuthoringRegistry<TWorld>`. `Awake` and `Start` register creation intent
+according to `UsageType`; `CreateEntity()` explicitly registers the same intent and does not
+promise that an entity already exists.
+
+`EcsService<TWorld>` performs an initial drain after world and system initialization and a
+drain before every Update, FixedUpdate, LateUpdate, and Cleanup boundary, even when that
+system group is disabled. Providers created inside a group wait for the next invoked
+boundary. Requests may therefore arrive before startup, from additive scenes, or from
+runtime prefab instances without a scene scan.
+
+A normal batch is ordered by scene path, hierarchy sibling path, and provider component
+index. Dependency-ready providers are created in waves; links and created callbacks run
+only after the batch has been created. Any converter, link, or callback exception rolls back
+every entity created by that batch and clears its provider GID.
+
+Trusted factories that cannot wait for a service boundary may use the atomic immediate path:
+
+```csharp
+if (EcsAuthoringRegistry.TryCreateImmediate(provider, out var gid, out var reason))
+{
+    // Add trusted server-owned data before exposing the GameObject to gameplay.
+}
+```
+
+`TryCreateImmediate` uses the same converter and link lifecycle but intentionally does not
+participate in scene-batch ordering. Service teardown destroys provider-owned entities before
+systems and the world, while persistent enabled intent is retained for repeated startup.
 
 Feature initialization receives the lifetime owned by the current world directly.
 Pass the same instance to nested programmatic features and use

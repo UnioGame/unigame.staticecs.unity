@@ -136,7 +136,9 @@ namespace UniGame.StaticEcs.Unity.Tests
             try
             {
                 Assert.That(provider.CreateEntity(), Is.True);
+                EcsAuthoringRegistry<TestSerializableConverterWorld>.Drain();
                 provider.ResolveLinks();
+                EcsAuthoringRegistry<TestSerializableConverterWorld>.Drain();
                 UnityEngine.Object.DestroyImmediate(host);
                 host = null;
 
@@ -165,7 +167,9 @@ namespace UniGame.StaticEcs.Unity.Tests
             try
             {
                 Assert.That(provider.CreateEntity(), Is.True);
+                EcsAuthoringRegistry<TestSerializableConverterWorld>.Drain();
                 provider.ResolveLinks();
+                EcsAuthoringRegistry<TestSerializableConverterWorld>.Drain();
                 UnityEngine.Object.DestroyImmediate(host);
                 host = null;
 

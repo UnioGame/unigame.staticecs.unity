@@ -119,6 +119,8 @@ namespace UniGame.StaticEcs.Unity
                 Report.stage = EcsStartupStage.InitializeSystems;
                 Report.currentFeature = null;
                 InitializeSystems();
+                EcsAuthoringRegistry<TWorld>.BeginWorld();
+                EcsAuthoringRegistry<TWorld>.Drain();
 
                 Report.stage = EcsStartupStage.Completed;
                 Report.currentFeature = null;
@@ -225,6 +227,7 @@ namespace UniGame.StaticEcs.Unity
         /// <inheritdoc />
         public void Update()
         {
+            EcsAuthoringRegistry<TWorld>.Drain();
             if (!_updateSystemsCreated)
                 return;
 
@@ -234,6 +237,7 @@ namespace UniGame.StaticEcs.Unity
         /// <inheritdoc />
         public void FixedUpdate()
         {
+            EcsAuthoringRegistry<TWorld>.Drain();
             if (_fixedSystemsCreated)
                 World<TWorld>.Systems<StaticEcsFixedUpdateSystems>.Update();
         }
@@ -241,6 +245,7 @@ namespace UniGame.StaticEcs.Unity
         /// <inheritdoc />
         public void LateUpdate()
         {
+            EcsAuthoringRegistry<TWorld>.Drain();
             if (_lateSystemsCreated)
                 World<TWorld>.Systems<StaticEcsLateUpdateSystems>.Update();
         }
@@ -248,6 +253,7 @@ namespace UniGame.StaticEcs.Unity
         /// <inheritdoc />
         public void CleanupUpdate()
         {
+            EcsAuthoringRegistry<TWorld>.Drain();
             if (_cleanupSystemsCreated)
                 World<TWorld>.Systems<StaticEcsCleanupSystems>.Update();
         }
@@ -466,6 +472,10 @@ namespace UniGame.StaticEcs.Unity
 
         private void TeardownWorld(string reason)
         {
+            TryCleanup(
+                $"authoring registry `{typeof(TWorld).Name}`",
+                reason,
+                static () => EcsAuthoringRegistry<TWorld>.EndWorld());
             TerminateWorldLifeTime(reason);
             DestroySystems(reason);
             DestroyWorldIfNeeded(reason);
