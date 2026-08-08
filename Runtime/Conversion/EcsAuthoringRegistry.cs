@@ -15,6 +15,7 @@ namespace UniGame.StaticEcs.Unity
         private static readonly Dictionary<EcsEntityProvider<TWorld>, Entry> Entries = new();
         private static readonly List<Entry> Batch = new();
         private static readonly List<Entry> Created = new();
+        private static bool _worldAcceptsAuthoring;
 
         /// <summary>Gets the number of registered providers.</summary>
         public static int Count => Entries.Count;
@@ -61,6 +62,8 @@ namespace UniGame.StaticEcs.Unity
 
             var entry = GetOrCreate(provider);
             entry.CreationRequested = true;
+            entry.RetryBlocked = false;
+            entry.Diagnostic = string.Empty;
             RefreshActiveState(entry);
             entry.PendingCreate = provider.isActiveAndEnabled && !entry.Active;
             return true;
@@ -114,6 +117,8 @@ namespace UniGame.StaticEcs.Unity
 
             var entry = GetOrCreate(provider);
             entry.CreationRequested = true;
+            entry.RetryBlocked = false;
+            entry.Diagnostic = string.Empty;
             RefreshActiveState(entry);
             if (entry.Active)
             {
@@ -150,6 +155,8 @@ namespace UniGame.StaticEcs.Unity
                 TryRollback(entry);
                 reason = exception.Message;
                 entry.Diagnostic = reason;
+                entry.PendingCreate = false;
+                entry.RetryBlocked = true;
                 return false;
             }
         }
@@ -168,7 +175,11 @@ namespace UniGame.StaticEcs.Unity
             }
 
             if (entry.CreationRequested)
+            {
+                entry.RetryBlocked = false;
+                entry.Diagnostic = string.Empty;
                 entry.PendingCreate = true;
+            }
         }
 
         /// <summary>Cancels undrained creation and queues entity disable when configured.</summary>
@@ -206,10 +217,13 @@ namespace UniGame.StaticEcs.Unity
         /// <summary>Begins one initialized world and restores enabled persistent requests.</summary>
         public static void BeginWorld()
         {
+            _worldAcceptsAuthoring = true;
             foreach (var pair in Entries)
             {
                 var entry = pair.Value;
                 entry.Active = false;
+                entry.RetryBlocked = false;
+                entry.Diagnostic = string.Empty;
                 entry.PendingEnable = false;
                 entry.PendingDisable = false;
                 entry.PendingResolve = false;
@@ -224,7 +238,7 @@ namespace UniGame.StaticEcs.Unity
         /// <summary>Applies one deterministic provider batch at a service boundary.</summary>
         public static int Drain()
         {
-            if (World<TWorld>.Status != WorldStatus.Initialized)
+            if (!_worldAcceptsAuthoring || World<TWorld>.Status != WorldStatus.Initialized)
                 return 0;
 
             ApplyStateIntents();
@@ -233,7 +247,8 @@ namespace UniGame.StaticEcs.Unity
             {
                 var entry = pair.Value;
                 RefreshActiveState(entry);
-                if (entry.PendingCreate && !entry.Active && entry.Provider != null)
+                if (entry.PendingCreate && !entry.RetryBlocked &&
+                    !entry.Active && entry.Provider != null)
                     Batch.Add(entry);
             }
 
@@ -270,7 +285,12 @@ namespace UniGame.StaticEcs.Unity
                     }
                     catch (Exception exception)
                     {
-                        RollbackCreated($"Creation batch rolled back: {exception.Message}");
+                        FailEntry(
+                            entry,
+                            $"Provider creation failed: {exception.Message}");
+                        RollbackCreated(
+                            $"Creation batch rolled back: {exception.Message}",
+                            entry);
                         return 0;
                     }
                 }
@@ -279,14 +299,42 @@ namespace UniGame.StaticEcs.Unity
             try
             {
                 for (var index = 0; index < Created.Count; index++)
-                    Created[index].Provider.ResolveLinksNow();
+                {
+                    var entry = Created[index];
+                    try
+                    {
+                        entry.Provider.ResolveLinksNow();
+                    }
+                    catch (Exception exception)
+                    {
+                        FailEntry(
+                            entry,
+                            $"Provider link resolution failed: {exception.Message}");
+                        throw;
+                    }
+                }
 
                 for (var index = 0; index < Created.Count; index++)
-                    Created[index].Provider.InvokeCreatedNow();
+                {
+                    var entry = Created[index];
+                    try
+                    {
+                        entry.Provider.InvokeCreatedNow();
+                    }
+                    catch (Exception exception)
+                    {
+                        FailEntry(
+                            entry,
+                            $"Provider activation failed: {exception.Message}");
+                        throw;
+                    }
+                }
             }
             catch (Exception exception)
             {
-                RollbackCreated($"Activation batch rolled back: {exception.Message}");
+                RollbackCreated(
+                    $"Activation batch rolled back: {exception.Message}",
+                    FindFailedEntry());
                 return 0;
             }
 
@@ -330,9 +378,13 @@ namespace UniGame.StaticEcs.Unity
             return true;
         }
 
+        /// <summary>Stops authoring drains while systems still have access to provider entities.</summary>
+        public static void StopWorld() => _worldAcceptsAuthoring = false;
+
         /// <summary>Destroys provider-owned entities before world teardown while retaining enabled requests.</summary>
         public static void EndWorld()
         {
+            StopWorld();
             foreach (var pair in Entries)
             {
                 var entry = pair.Value;
@@ -348,6 +400,7 @@ namespace UniGame.StaticEcs.Unity
                 entry.PendingEnable = false;
                 entry.PendingDisable = false;
                 entry.PendingResolve = false;
+                entry.RetryBlocked = false;
             }
         }
 
@@ -443,19 +496,42 @@ namespace UniGame.StaticEcs.Unity
             return destroyed;
         }
 
-        private static void RollbackCreated(string diagnostic)
+        private static void RollbackCreated(string diagnostic, Entry failedEntry = null)
         {
             for (var index = Created.Count - 1; index >= 0; index--)
             {
                 var entry = Created[index];
                 TryRollback(entry);
-                entry.PendingCreate = entry.CreationRequested &&
-                                      entry.Provider != null &&
-                                      entry.Provider.isActiveAndEnabled;
-                entry.Diagnostic = diagnostic;
+                if (ReferenceEquals(entry, failedEntry))
+                {
+                    entry.PendingCreate = false;
+                    entry.RetryBlocked = true;
+                }
+                else
+                {
+                    entry.PendingCreate = entry.CreationRequested &&
+                                          entry.Provider != null &&
+                                          entry.Provider.isActiveAndEnabled;
+                    entry.Diagnostic = diagnostic;
+                }
             }
 
             Created.Clear();
+        }
+
+        private static void FailEntry(Entry entry, string diagnostic)
+        {
+            entry.PendingCreate = false;
+            entry.RetryBlocked = true;
+            entry.Diagnostic = diagnostic;
+        }
+
+        private static Entry FindFailedEntry()
+        {
+            for (var index = 0; index < Created.Count; index++)
+                if (Created[index].RetryBlocked)
+                    return Created[index];
+            return null;
         }
 
         private static void TryRollback(Entry entry)
@@ -488,6 +564,7 @@ namespace UniGame.StaticEcs.Unity
             internal bool PendingDisable;
             internal bool PendingResolve;
             internal bool Active;
+            internal bool RetryBlocked;
             internal string Diagnostic;
         }
 

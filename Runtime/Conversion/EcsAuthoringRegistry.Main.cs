@@ -65,6 +65,9 @@ namespace UniGame.StaticEcs.Unity
         /// <summary>Begins Main-world authoring after world initialization.</summary>
         public static void BeginWorld() => EcsAuthoringRegistry<Main>.BeginWorld();
 
+        /// <summary>Stops Main-world authoring drains while teardown systems inspect entities.</summary>
+        public static void StopWorld() => EcsAuthoringRegistry<Main>.StopWorld();
+
         /// <summary>Ends Main-world authoring before world teardown.</summary>
         public static void EndWorld() => EcsAuthoringRegistry<Main>.EndWorld();
 

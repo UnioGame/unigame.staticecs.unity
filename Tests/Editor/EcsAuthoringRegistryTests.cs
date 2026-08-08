@@ -78,6 +78,33 @@ namespace UniGame.StaticEcs.Unity.Tests
         }
 
         [Test]
+        public void ConverterFailure_IsDiagnosedAndRequiresExplicitRetry()
+        {
+            var provider = new GameObject("throwing apply").AddComponent<TestEntityProvider>();
+            var converter = new ThrowingApplyConverter();
+            provider.serializableConverters.Add(converter);
+            provider.CreateEntity();
+
+            Assert.That(EcsAuthoringRegistry<TestSerializableConverterWorld>.Drain(), Is.Zero);
+            Assert.That(converter.ApplyCount, Is.EqualTo(1));
+            Assert.That(provider.EntityGid, Is.EqualTo(default(EntityGID)));
+            Assert.That(
+                EcsAuthoringRegistry<TestSerializableConverterWorld>.TryGetDiagnostic(
+                    provider, out var diagnostic), Is.True);
+            Assert.That(diagnostic, Does.Contain("creation failed"));
+
+            Assert.That(EcsAuthoringRegistry<TestSerializableConverterWorld>.Drain(), Is.Zero);
+            Assert.That(converter.ApplyCount, Is.EqualTo(1),
+                "A converter exception must not retry at every service boundary.");
+
+            converter.Throw = false;
+            Assert.That(provider.CreateEntity(), Is.True);
+            Assert.That(EcsAuthoringRegistry<TestSerializableConverterWorld>.Drain(), Is.EqualTo(1));
+            Assert.That(converter.ApplyCount, Is.EqualTo(2));
+            Assert.That(provider.EntityGid.TryUnpack<TestSerializableConverterWorld>(out _), Is.True);
+        }
+
+        [Test]
         public void ImmediateCreation_IsAtomicAndVisible()
         {
             var provider = new GameObject("immediate").AddComponent<TestEntityProvider>();
@@ -161,6 +188,23 @@ namespace UniGame.StaticEcs.Unity.Tests
                 World<TestSerializableConverterWorld>.Entity entity,
                 GameObject host) =>
                 throw new InvalidOperationException("link failure");
+        }
+
+        [Serializable]
+        private sealed class ThrowingApplyConverter :
+            EcsSerializableConverter<TestSerializableConverterWorld>
+        {
+            internal bool Throw = true;
+            internal int ApplyCount;
+
+            public override void Apply(
+                World<TestSerializableConverterWorld>.Entity entity,
+                GameObject host)
+            {
+                ApplyCount++;
+                if (Throw)
+                    throw new InvalidOperationException("apply failure");
+            }
         }
 
         [Serializable]

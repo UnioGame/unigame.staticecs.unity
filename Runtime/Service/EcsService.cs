@@ -473,11 +473,15 @@ namespace UniGame.StaticEcs.Unity
         private void TeardownWorld(string reason)
         {
             TryCleanup(
-                $"authoring registry `{typeof(TWorld).Name}`",
+                $"authoring registry stop `{typeof(TWorld).Name}`",
+                reason,
+                static () => EcsAuthoringRegistry<TWorld>.StopWorld());
+            DestroySystems(reason);
+            TryCleanup(
+                $"authoring registry teardown `{typeof(TWorld).Name}`",
                 reason,
                 static () => EcsAuthoringRegistry<TWorld>.EndWorld());
             TerminateWorldLifeTime(reason);
-            DestroySystems(reason);
             DestroyWorldIfNeeded(reason);
             DestroyRuntimeFeatures(reason);
         }

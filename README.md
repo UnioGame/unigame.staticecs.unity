@@ -143,8 +143,9 @@ if (EcsAuthoringRegistry.TryCreateImmediate(provider, out var gid, out var reaso
 ```
 
 `TryCreateImmediate` uses the same converter and link lifecycle but intentionally does not
-participate in scene-batch ordering. Service teardown destroys provider-owned entities before
-systems and the world, while persistent enabled intent is retained for repeated startup.
+participate in scene-batch ordering. Service teardown first stops new authoring drains, lets
+systems release runtime state that refers to authored entities, and then destroys provider-owned
+entities before the world. Persistent enabled intent is retained for repeated startup.
 
 Feature initialization receives the lifetime owned by the current world directly.
 Pass the same instance to nested programmatic features and use
