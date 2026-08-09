@@ -506,6 +506,9 @@ namespace UniGame.StaticEcs.Unity
                 {
                     entry.PendingCreate = false;
                     entry.RetryBlocked = true;
+                    entry.Diagnostic = string.IsNullOrEmpty(entry.Diagnostic)
+                        ? diagnostic
+                        : $"{entry.Diagnostic} {diagnostic}";
                 }
                 else
                 {
