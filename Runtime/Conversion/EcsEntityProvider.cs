@@ -75,7 +75,7 @@ namespace UniGame.StaticEcs.Unity
         {
             if (World<TWorld>.Status != WorldStatus.Initialized)
                 return false;
-            if (entityGid.Status<TWorld>() == GIDStatus.Active)
+            if (entityGid.TryUnpack<TWorld>(out _))
                 return false;
             if (!CanCreate(out _))
                 return false;
@@ -130,7 +130,6 @@ namespace UniGame.StaticEcs.Unity
         internal bool DestroyEntityNow()
         {
             if (World<TWorld>.Status != WorldStatus.Initialized ||
-                entityGid.Status<TWorld>() != GIDStatus.Active ||
                 !entityGid.TryUnpack<TWorld>(out var entity))
             {
                 DetachEntityNow();
@@ -177,7 +176,6 @@ namespace UniGame.StaticEcs.Unity
         internal void ResolveLinksNow()
         {
             if (World<TWorld>.Status != WorldStatus.Initialized ||
-                entityGid.Status<TWorld>() != GIDStatus.Active ||
                 !entityGid.TryUnpack<TWorld>(out var entity))
                 return;
 
