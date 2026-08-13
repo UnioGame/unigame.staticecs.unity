@@ -5,7 +5,7 @@ namespace UniGame.StaticEcs.Unity
     using UniGame.Core.Runtime;
 
     /// <summary>Exposes the non-owning application context during ECS initialization.</summary>
-    public readonly struct EcsContextResource : IResource
+    public struct EcsContextResource : IResource
     {
         /// <summary>Creates a resource for a live application context.</summary>
         public EcsContextResource(IContext context)
@@ -13,8 +13,8 @@ namespace UniGame.StaticEcs.Unity
             Context = context ?? throw new ArgumentNullException(nameof(context));
         }
 
-        /// <summary>Gets the context owned by the surrounding application.</summary>
-        public IContext Context { get; }
+        /// <summary>Context owned by the surrounding application.</summary>
+        public IContext Context;
     }
 
     /// <summary>Provides direct access to the application context stored in a Static ECS world.</summary>

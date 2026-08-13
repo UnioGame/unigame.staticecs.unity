@@ -13,8 +13,8 @@ namespace UniGame.StaticEcs.Unity
             LifeTime = lifeTime ?? throw new ArgumentNullException(nameof(lifeTime));
         }
 
-        /// <summary>Gets the lifetime terminated when the current world is torn down.</summary>
-        public ILifeTime LifeTime { get; }
+        /// <summary>Lifetime terminated when the current world is torn down.</summary>
+        public ILifeTime LifeTime;
     }
 
     /// <summary>Provides direct lifetime access for active Static ECS world handles.</summary>

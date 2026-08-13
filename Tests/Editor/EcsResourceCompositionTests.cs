@@ -456,7 +456,7 @@ namespace UniGame.StaticEcs.Unity.Tests
                 Context = context;
             }
 
-            public IContext Context { get; }
+            public IContext Context;
         }
 
         private sealed class MissingDependenciesAsset :
