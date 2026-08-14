@@ -91,6 +91,10 @@ feature base classes. A feature variant can therefore inherit shared markers
 from another runtime asmdef without adding a second feature asset or manually
 registering ordinary components.
 
+When `TFeature` implements `IStaticEcsFeatureTypeRegistrar<TWorld>`, the asset
+forwards type registration automatically. Derived assets do not repeat a
+`RegisterTypes` proxy method.
+
 Declare closed generic types once in their owning assembly:
 
 ```csharp

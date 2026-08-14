@@ -77,7 +77,8 @@ namespace UniGame.StaticEcs.Unity
 
     /// <summary>Serializes and initializes a programmatic feature for a specific world.</summary>
     public abstract class StaticEcsFeatureAsset<TWorld, TFeature> :
-        StaticEcsFeatureAsset<TWorld>
+        StaticEcsFeatureAsset<TWorld>,
+        IStaticEcsFeatureTypeRegistrar<TWorld>
         where TWorld : struct, IWorldType
         where TFeature : class, IStaticEcsFeature<TWorld>, new()
     {
@@ -91,6 +92,13 @@ namespace UniGame.StaticEcs.Unity
         /// <inheritdoc />
         public override Type ProgrammaticFeatureType =>
             typeof(TFeature);
+
+        /// <summary>Registers types owned by the serialized programmatic feature, when supported.</summary>
+        public void RegisterTypes(World<TWorld>.TypeRegistrar types)
+        {
+            if (feature is IStaticEcsFeatureTypeRegistrar<TWorld> registrar)
+                registrar.RegisterTypes(types);
+        }
 
         /// <inheritdoc />
         public sealed override void OpenFeatureScript()

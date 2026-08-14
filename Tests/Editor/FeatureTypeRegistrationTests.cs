@@ -178,6 +178,33 @@ namespace UniGame.StaticEcs.Unity.Tests
         }
 
         [Test]
+        public void ProgrammaticFeatureAssetForwardsOwnedTypeRegistration()
+        {
+            var asset = ScriptableObject.CreateInstance<
+                ProgrammaticRegistrationFeatureAsset>();
+            var service = CreateService<RegistrationWorld>();
+            try
+            {
+                using var context = new EntityContext();
+                service.InitializeAsync(
+                        Entries(asset),
+                        context,
+                        CancellationToken.None)
+                    .GetAwaiter()
+                    .GetResult();
+
+                var entity = World<RegistrationWorld>.NewEntity<Default>();
+                Assert.DoesNotThrow(() =>
+                    entity.Add<ClosedGenericComponent<decimal>>());
+            }
+            finally
+            {
+                service.Dispose();
+                Object.DestroyImmediate(asset);
+            }
+        }
+
+        [Test]
         public void DisabledFeatureAssemblyIsNotScannedOrInitialized()
         {
             var asset = ScriptableObject.CreateInstance<DisabledFeatureAsset>();
@@ -307,6 +334,28 @@ namespace UniGame.StaticEcs.Unity.Tests
 
     public sealed class DerivedRegistrationFeatureAsset :
         StaticEcsFeatureAsset<ProgrammaticFeatureWorld, DerivedRegistrationFeature>
+    {
+    }
+
+    public sealed class ProgrammaticRegistrationFeature :
+        StaticEcsFeature<RegistrationWorld>,
+        IStaticEcsFeatureTypeRegistrar<RegistrationWorld>
+    {
+        public void RegisterTypes(
+            World<RegistrationWorld>.TypeRegistrar types)
+        {
+            types.Component<ClosedGenericComponent<decimal>>();
+        }
+
+        public override UniTask InitializeAsync(ILifeTime lifeTime)
+        {
+            return UniTask.CompletedTask;
+        }
+    }
+
+    public sealed class ProgrammaticRegistrationFeatureAsset :
+        StaticEcsFeatureAsset<RegistrationWorld,
+            ProgrammaticRegistrationFeature>
     {
     }
 
