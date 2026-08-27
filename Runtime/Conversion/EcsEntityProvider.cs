@@ -110,8 +110,11 @@ namespace UniGame.StaticEcs.Unity
                 if (disableEntityOnCreate)
                     entity.Disable();
             }
-            catch
+            catch (Exception exception)
             {
+#if UNITY_EDITOR
+                Debug.LogError(exception);
+#endif
                 try
                 {
                     DestroyEntityNow();
