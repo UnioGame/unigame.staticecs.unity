@@ -10,6 +10,8 @@ using UniGame.Runtime.DataFlow;
 
 namespace UniGame.StaticEcs.Unity
 {
+    using FFS.Libraries.StaticEcs.Unity;
+
     /// <summary>Owns one Static ECS world and its Unity player-loop system groups.</summary>
     public class EcsService<TWorld> : IEcsService
         where TWorld : struct, IWorldType
@@ -118,6 +120,16 @@ namespace UniGame.StaticEcs.Unity
 
                 Report.stage = EcsStartupStage.InitializeSystems;
                 Report.currentFeature = null;
+#if UNITY_EDITOR
+                if (_updateSystemsCreated)
+                    EcsDebug<TWorld>.AddWorld<StaticEcsUpdateSystems>();
+                else if (_fixedSystemsCreated)
+                    EcsDebug<TWorld>.AddWorld<StaticEcsFixedUpdateSystems>();
+                else if (_lateSystemsCreated)
+                    EcsDebug<TWorld>.AddWorld<StaticEcsLateUpdateSystems>();
+                else if (_cleanupSystemsCreated)
+                    EcsDebug<TWorld>.AddWorld<StaticEcsCleanupSystems>();
+#endif
                 InitializeSystems();
                 EcsAuthoringRegistry<TWorld>.BeginWorld();
                 EcsAuthoringRegistry<TWorld>.Drain();
@@ -468,10 +480,14 @@ namespace UniGame.StaticEcs.Unity
                 World<TWorld>.Systems<StaticEcsCleanupSystems>.Initialize();
 
             Report.systemsInitialized = true;
+
         }
 
         private void TeardownWorld(string reason)
         {
+#if UNITY_EDITOR
+            EcsDebug<TWorld>.RemoveWorld();
+#endif
             TryCleanup(
                 $"authoring registry stop `{typeof(TWorld).Name}`",
                 reason,
