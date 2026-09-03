@@ -57,4 +57,9 @@ Use the repo-local `$build-static-ecs-features` skill for feature assets, conver
 
 ## Documentation
 
-- Public docs are English, use Capabilities / Usage / Configuration, and every public API has an XML summary.
+- Public docs are English and use Capabilities / Usage / Configuration. Keep short
+  XML summaries on public types; document public members only for non-obvious
+  ownership, lifetime, units, zero/null meaning, ordering, failure, or wire
+  semantics. Explain why and constraints, not signatures or the next line.
+- Remove stale TODOs and commented-out code. Review enforces the policy; do not add
+  a dedicated analyzer.
