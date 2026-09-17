@@ -25,7 +25,7 @@ namespace UniGame.StaticEcs.Unity.Tests
             if (World<TestSerializableConverterWorld>.Status != WorldStatus.NotCreated)
                 World<TestSerializableConverterWorld>.Destroy();
             foreach (var provider in UnityEngine.Object.FindObjectsByType<TestEntityProvider>(
-                         FindObjectsInactive.Include, FindObjectsSortMode.None))
+                         FindObjectsInactive.Include))
                 if (provider != null)
                     UnityEngine.Object.DestroyImmediate(provider.gameObject);
         }
