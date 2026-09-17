@@ -5,6 +5,7 @@ namespace UniGame.StaticEcs.Unity.Tests
     using FFS.Libraries.StaticEcs;
     using NUnit.Framework;
     using UnityEngine;
+    using UnityEngine.TestTools;
 
     /// <summary>Verifies centralized provider creation, rollback and stale-state recovery.</summary>
     [TestFixture]
@@ -85,6 +86,7 @@ namespace UniGame.StaticEcs.Unity.Tests
             provider.serializableConverters.Add(converter);
             provider.CreateEntity();
 
+            LogAssert.Expect(LogType.Error, new System.Text.RegularExpressions.Regex("System.InvalidOperationException: apply failure"));
             Assert.That(EcsAuthoringRegistry<TestSerializableConverterWorld>.Drain(), Is.Zero);
             Assert.That(converter.ApplyCount, Is.EqualTo(1));
             Assert.That(provider.EntityGid, Is.EqualTo(default(EntityGID)));
