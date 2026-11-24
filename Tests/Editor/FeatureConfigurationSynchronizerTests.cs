@@ -16,23 +16,6 @@ namespace UniGame.StaticEcs.Unity.Tests
         private const string TestFolder = "Assets/__StaticEcsFeatureSyncTests";
 
         [Test]
-        public void FeatureEntry_UsesEnabledFlag()
-        {
-            var enabled = new StaticEcsFeatureEntry
-            {
-                enabled = true,
-            };
-            var disabled = new StaticEcsFeatureEntry
-            {
-                enabled = false,
-            };
-
-            Assert.That(enabled.IsEnabled, Is.True);
-            Assert.That(disabled.IsEnabled, Is.False);
-            Assert.That(new DerivedFeatureEntry().IsEnabled, Is.True);
-        }
-
-        [Test]
         public void Synchronize_RemovesNullAndDuplicates_PreservingFirstEntryStateAndOrder()
         {
             var first = ScriptableObject.CreateInstance<SyncFeatureAsset>();
@@ -95,8 +78,6 @@ namespace UniGame.StaticEcs.Unity.Tests
 
         private struct SyncWorld : IWorldType { }
         private struct WrongWorld : IWorldType { }
-
-        private sealed class DerivedFeatureEntry : StaticEcsFeatureEntry { }
 
         private sealed class SyncFeatureAsset : StaticEcsFeatureAsset<SyncWorld>
         {

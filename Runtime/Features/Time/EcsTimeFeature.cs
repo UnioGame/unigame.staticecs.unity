@@ -61,6 +61,21 @@ namespace UniGame.StaticEcs.Time
     /// <summary>Controls ECS time system composition and execution order.</summary>
     public sealed class EcsTimeConfig : IResource
     {
+        private float? _updateStepSeconds;
+
+        /// <summary>Optional unscaled duration of one Update; null uses Unity game time for scaled fields and frame time for unscaled fields.</summary>
+        public float? UpdateStepSeconds
+        {
+            get => _updateStepSeconds;
+            set
+            {
+                if (value.HasValue && (value.Value <= 0f || float.IsNaN(value.Value) ||
+                                       float.IsInfinity(value.Value)))
+                    throw new System.ArgumentOutOfRangeException(nameof(value));
+                _updateStepSeconds = value;
+            }
+        }
+
         /// <summary>Execution order of the Update time system.</summary>
         public short UpdateOrder = short.MinValue;
 

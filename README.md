@@ -6,11 +6,14 @@ This package owns the default `Main` world, feature assets, Unity authoring,
 converters, presets, player-loop runners, automatic type discovery, asynchronous
 resource access, centralized provider authoring, rollback, and repeated initialization.
 
+The [ECS time feature](Runtime/Features/Time/README.md) supplies scaled and
+unscaled time to each world and supports a fixed Update step for tick-driven worlds.
+
 Startup runs in this order:
 
 1. terminate the previous world lifetime, then destroy its systems, world, and runtime assets;
-2. clone enabled feature assets and collect their asset and programmatic feature
-   inheritance assemblies;
+2. validate the composition, create fresh code features, clone enabled feature
+   assets, and collect their asset and programmatic feature inheritance assemblies;
 3. create the world and publish `EcsWorldLifeTimeResource`, `EcsContextResource`,
    `StaticEcsWorldConfig`, and system configuration;
 4. create enabled system groups;
@@ -25,7 +28,36 @@ partially created world back.
 
 ## Usage
 
-Use a serialized programmatic feature for normal gameplay composition:
+Declare the world composition in code. Code features are created fresh for every
+initialization; assets and serialized entries can be mixed in the same ordered list:
+
+```csharp
+var composition = new StaticEcsComposition();
+composition.Add<MovementFeature>();
+composition.Add(effectsFeatureAsset);
+composition.Add<DemoFeature>();
+
+await service.InitializeAsync(composition, context, cancellationToken);
+```
+
+Declaration order is the order in which feature pipelines start. A programmatic
+feature type may appear once per world: two code declarations, or a code declaration
+and an asset adapter with the same `TFeature`, throw from `Add` at the offending line,
+as do a null asset, an asset listed twice, and an asset for another world. Features
+common to several worlds are simply added to each world's composition.
+
+Feature assets and code declarations are equally supported and can be mixed.
+
+Data used by several worlds lives in one ScriptableObject that implements `IResource`.
+`composition.AddResource(asset)` makes the service publish a runtime copy of it before
+features initialize, so each world gets its own resource and the asset never changes in
+Play Mode; the copy is destroyed with the world. A resource type is declared once per
+world, and a duplicate throws from `AddResource`. A feature reads it with
+`World<TWorld>.GetResource<T>()` and may keep its own serialized fields as a fallback for
+worlds composed without the resource.
+
+Use a serialized programmatic feature to compose and configure a feature through
+its asset:
 
 ```csharp
 [Serializable]

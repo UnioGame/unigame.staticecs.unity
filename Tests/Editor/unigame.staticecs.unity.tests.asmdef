@@ -3,6 +3,7 @@
     "rootNamespace": "UniGame.StaticEcs.Unity.Tests",
     "references": [
         "unigame.staticecs",
+        "unigame.staticecs.testsupport",
         "unigame.staticecs.unity",
         "unigame.staticecs.editor",
         "unigame.staticecs.unity.tests.disabledsupport",

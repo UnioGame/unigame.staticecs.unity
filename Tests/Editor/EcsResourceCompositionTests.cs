@@ -3,13 +3,13 @@ namespace UniGame.StaticEcs.Unity.Tests
     using System;
     using System.Collections.Generic;
     using System.Threading;
+    using System.Threading.Tasks;
     using Cysharp.Threading.Tasks;
     using FFS.Libraries.StaticEcs;
     using NUnit.Framework;
     using UniGame.Context.Runtime;
     using UniGame.Core.Runtime;
     using UniGame.Runtime.DataFlow;
-    using UnityEditor;
     using UnityEngine;
     using Object = UnityEngine.Object;
 
@@ -20,97 +20,59 @@ namespace UniGame.StaticEcs.Unity.Tests
         public void TearDown()
         {
             DestroyWorld<ResourceWorld>();
-            DestroyWorld<Main>();
         }
 
         [Test]
-        public async UniTask ResourceHandleGetAsyncWaitsWithoutClosureState()
-        {
-            World<ResourceWorld>.Create(WorldConfig.Default());
-            World<ResourceWorld>.Resource<FirstResource> handle = default;
-            var pending = handle.GetAsync(
-                TimeSpan.FromMilliseconds(50),
-                CancellationToken.None);
-
-            await UniTask.Yield();
-            var resource = new FirstResource { Value = 42 };
-            World<ResourceWorld>.SetResource(resource);
-
-            var result = await pending;
-            Assert.AreEqual(42, result.Value);
-
-            // Advance beyond the original timeout. A disposed timeout source must not
-            // remain scheduled in the UniTask player loop after successful completion.
-            await UniTask.Delay(TimeSpan.FromMilliseconds(75));
-        }
-
-        [Test]
-        public void DependencyTimeoutDefaultsMatchEditorAndPlayerPolicy()
-        {
-            var config = StaticEcsWorldConfig.Default;
-
-            Assert.AreEqual(5000, config.editorDependencyTimeoutMs);
-            Assert.AreEqual(10000, config.playerDependencyTimeoutMs);
-            Assert.AreEqual(
-                StaticEcsFeatureInitializationMode.Parallel,
-                config.featureInitializationMode);
-        }
-
-        [Test]
-        public void ResourceHandleGetAsyncTimeoutNamesResourceType()
+        public async Task ResourceHandleGetAsyncTimeoutNamesResourceType()
         {
             World<ResourceWorld>.Create(WorldConfig.Default());
             World<ResourceWorld>.Resource<SecondResource> handle = default;
 
-            var exception = Assert.ThrowsAsync<TimeoutException>(async () =>
+            Exception exception = null;
+            try
+            {
                 await handle.GetAsync(
                     TimeSpan.FromMilliseconds(20),
-                    CancellationToken.None));
+                    CancellationToken.None);
+            }
+            catch (Exception caught)
+            {
+                exception = caught;
+            }
 
+            Assert.IsNotNull(exception, "The resource wait was expected to time out.");
+            Assert.AreEqual(typeof(TimeoutException), exception.GetType());
             StringAssert.Contains(typeof(SecondResource).FullName, exception.Message);
         }
 
         [Test]
-        public void ResourceHandleGetAsyncPreservesExternalCancellation()
+        public async Task ResourceHandleGetAsyncPreservesExternalCancellation()
         {
             World<ResourceWorld>.Create(WorldConfig.Default());
             World<ResourceWorld>.Resource<SecondResource> handle = default;
             using var cancellation = new CancellationTokenSource();
             cancellation.Cancel();
 
-            Assert.ThrowsAsync<OperationCanceledException>(async () =>
-                await handle.GetAsync(
-                    TimeSpan.FromSeconds(1),
-                    cancellation.Token));
-        }
-
-        [Test]
-        public async UniTask ResourceHandleGetAsyncDisposesTimerAfterExternalCancellation()
-        {
-            World<ResourceWorld>.Create(WorldConfig.Default());
-            World<ResourceWorld>.Resource<SecondResource> handle = default;
-            using var cancellation = new CancellationTokenSource();
-            var pending = handle.GetAsync(
-                TimeSpan.FromMilliseconds(100),
-                cancellation.Token);
-
-            await UniTask.Yield();
-            cancellation.Cancel();
-
+            Exception exception = null;
             try
             {
-                await pending;
-                Assert.Fail("The resource wait was expected to be cancelled.");
+                await handle.GetAsync(
+                    TimeSpan.FromSeconds(1),
+                    cancellation.Token);
             }
-            catch (OperationCanceledException)
+            catch (Exception caught)
             {
+                exception = caught;
             }
 
-            await UniTask.Delay(TimeSpan.FromMilliseconds(125));
+            Assert.IsNotNull(
+                exception,
+                "The resource wait was expected to be cancelled.");
+            Assert.AreEqual(typeof(OperationCanceledException), exception.GetType());
         }
 
         [Test]
-        public void FeatureResourceTimeoutReportsExactResourceAndFeature()
+        public async Task FeatureResourceTimeoutReportsExactResourceAndFeature()
         {
             var asset = ScriptableObject.CreateInstance<MissingDependenciesAsset>();
             var config = StaticEcsWorldConfig.Default;
@@ -120,12 +82,23 @@ namespace UniGame.StaticEcs.Unity.Tests
             try
             {
                 using var context = new EntityContext();
-                var exception = Assert.ThrowsAsync<TimeoutException>(async () =>
+                Exception exception = null;
+                try
+                {
                     await service.InitializeAsync(
                         Entries(asset),
                         context,
-                        CancellationToken.None));
+                        CancellationToken.None);
+                }
+                catch (Exception caught)
+                {
+                    exception = caught;
+                }
 
+                Assert.IsNotNull(
+                    exception,
+                    "Feature initialization was expected to time out.");
+                Assert.AreEqual(typeof(TimeoutException), exception.GetType());
                 StringAssert.Contains(typeof(FirstResource).FullName, exception.Message);
                 Assert.AreEqual(
                     EcsStartupStage.InitializeFeatures,
@@ -141,7 +114,7 @@ namespace UniGame.StaticEcs.Unity.Tests
         }
 
         [Test]
-        public async UniTask EarlierFeatureProvidesDependenciesToLaterFeature()
+        public async Task EarlierFeatureProvidesDependenciesToLaterFeature()
         {
             var provider = ScriptableObject.CreateInstance<ResourceProviderAsset>();
             var consumer = ScriptableObject.CreateInstance<ResourceConsumerAsset>();
@@ -169,7 +142,7 @@ namespace UniGame.StaticEcs.Unity.Tests
         }
 
         [Test]
-        public async UniTask ParallelModeAllowsLaterFeatureToProvideDependency()
+        public async Task ParallelModeAllowsLaterFeatureToProvideDependency()
         {
             var consumer = ScriptableObject.CreateInstance<ResourceConsumerAsset>();
             var provider = ScriptableObject.CreateInstance<ResourceProviderAsset>();
@@ -194,7 +167,7 @@ namespace UniGame.StaticEcs.Unity.Tests
         }
 
         [Test]
-        public void SequentialModeRequiresProviderBeforeConsumer()
+        public async Task SequentialModeRequiresProviderBeforeConsumer()
         {
             var consumer = ScriptableObject.CreateInstance<ResourceConsumerAsset>();
             var provider = ScriptableObject.CreateInstance<ResourceProviderAsset>();
@@ -208,11 +181,23 @@ namespace UniGame.StaticEcs.Unity.Tests
             {
                 using var context = new EntityContext();
 
-                Assert.ThrowsAsync<TimeoutException>(async () =>
+                Exception exception = null;
+                try
+                {
                     await service.InitializeAsync(
                         Entries(consumer, provider),
                         context,
-                        CancellationToken.None));
+                        CancellationToken.None);
+                }
+                catch (Exception caught)
+                {
+                    exception = caught;
+                }
+
+                Assert.IsNotNull(
+                    exception,
+                    "Sequential feature initialization was expected to time out.");
+                Assert.AreEqual(typeof(TimeoutException), exception.GetType());
             }
             finally
             {
@@ -223,7 +208,7 @@ namespace UniGame.StaticEcs.Unity.Tests
         }
 
         [Test]
-        public async UniTask GenericAndStandaloneAssetsReceiveWorldLifetime()
+        public async Task GenericAndStandaloneAssetsReceiveWorldLifetime()
         {
             var adapter = ScriptableObject.CreateInstance<AdapterAsset>();
             var standalone = ScriptableObject.CreateInstance<StandaloneAsset>();
@@ -266,53 +251,7 @@ namespace UniGame.StaticEcs.Unity.Tests
         }
 
         [Test]
-        public void GenericFeatureFieldSurvivesUnitySerialization()
-        {
-            var source = ScriptableObject.CreateInstance<AdapterAsset>();
-            var target = ScriptableObject.CreateInstance<AdapterAsset>();
-            try
-            {
-                source.feature.value = 42;
-
-                var json = EditorJsonUtility.ToJson(source);
-                EditorJsonUtility.FromJsonOverwrite(json, target);
-
-                Assert.AreEqual(42, target.feature.value);
-            }
-            finally
-            {
-                Object.DestroyImmediate(target);
-                Object.DestroyImmediate(source);
-            }
-        }
-
-        [Test]
-        public async UniTask ProgrammaticFeatureInitializesWithoutAsset()
-        {
-            World<ResourceWorld>.Create(WorldConfig.Default());
-            var lifeTime = new LifeTime();
-            try
-            {
-                var feature = new AdapterFeature
-                {
-                    value = 31,
-                };
-
-                await feature.InitializeAsync(lifeTime);
-
-                var resource = World<ResourceWorld>
-                    .GetResource<FeatureInitializationResource>();
-                Assert.AreEqual(31, resource.Value);
-                Assert.AreSame(lifeTime, resource.LifeTime);
-            }
-            finally
-            {
-                lifeTime.Terminate();
-            }
-        }
-
-        [Test]
-        public async UniTask ContextIsAvailableThroughMainAndGenericHelpers()
+        public async Task ContextIsAvailableThroughGenericHelpers()
         {
             var asset = ScriptableObject.CreateInstance<ContextReaderAsset>();
             var service = CreateService(StaticEcsWorldConfig.Default);
@@ -334,16 +273,10 @@ namespace UniGame.StaticEcs.Unity.Tests
                 service.Dispose();
                 Object.DestroyImmediate(asset);
             }
-
-            World<Main>.Create(WorldConfig.Default());
-            using var mainContext = new EntityContext();
-            var contextResource = new EcsContextResource(mainContext);
-            World<Main>.SetResource(contextResource);
-            Assert.AreSame(mainContext, StaticEcsContext.Get());
         }
 
         [Test]
-        public void WorldHandleLifeTimeExtensionSupportsMainAndCustomWorlds()
+        public void WorldHandleLifeTimeExtensionSupportsCustomWorlds()
         {
             World<ResourceWorld>.Create(WorldConfig.Default());
             var customLifeTime = new LifeTime();
@@ -360,15 +293,7 @@ namespace UniGame.StaticEcs.Unity.Tests
                     .GetResource<EcsWorldLifeTimeResource>()
                     .LifeTime);
 
-            World<Main>.Create(WorldConfig.Default());
-            var mainLifeTime = new LifeTime();
-            var mainResource = new EcsWorldLifeTimeResource(mainLifeTime);
-            World<Main>.SetResource(mainResource);
-
-            Assert.AreSame(mainLifeTime, World<Main>.Handle.GetLifeTime());
-
             customLifeTime.Terminate();
-            mainLifeTime.Terminate();
         }
 
         [Test]

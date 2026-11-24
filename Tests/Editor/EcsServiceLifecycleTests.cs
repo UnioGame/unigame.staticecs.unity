@@ -10,6 +10,7 @@ namespace UniGame.StaticEcs.Unity.Tests
     using NUnit.Framework;
     using UniGame.Context.Runtime;
     using UniGame.Core.Runtime;
+    using UnityEditor;
     using UnityEngine;
     using UnityEngine.TestTools;
     using Object = UnityEngine.Object;
@@ -22,11 +23,16 @@ namespace UniGame.StaticEcs.Unity.Tests
         private static ILifeTime LastWorldLifeTime;
         private static ILifeTime LastFeatureLifeTime;
         private static WorldStatus LastWorldStatus;
+        private static bool _fixtureAborted;
+        private static string _fixtureAbortReason;
         private EntityContext _context;
 
         [SetUp]
         public void SetUp()
         {
+            if (_fixtureAborted)
+                Assert.Ignore(_fixtureAbortReason);
+
             Log.Clear();
             Gates.Clear();
             RuntimeAssets.Clear();
@@ -40,6 +46,9 @@ namespace UniGame.StaticEcs.Unity.Tests
         [TearDown]
         public void TearDown()
         {
+            if (_fixtureAborted)
+                return;
+
             DestroyWorld();
             _context?.Dispose();
         }
@@ -55,33 +64,91 @@ namespace UniGame.StaticEcs.Unity.Tests
             config.featureInitializationMode =
                 StaticEcsFeatureInitializationMode.Sequential;
             var service = CreateService(config);
+            Task initialization = null;
+            using var initializationCancellation = new CancellationTokenSource();
             try
             {
-                var initialization = service.InitializeAsync(
+                initialization = service.InitializeAsync(
                     Entries(first, second),
                     _context,
-                    CancellationToken.None);
-                await UniTask.WaitUntil(
-                    static () => Log.Contains("first:initialize:begin"));
+                    initializationCancellation.Token)
+                    .AsTask();
+                Exception waitFailure = null;
+                Exception cleanupFailure = null;
+                try
+                {
+                    using var waitDeadline =
+                        new CancellationTokenSource(TimeSpan.FromSeconds(10));
+                    try
+                    {
+                        await UniTask.WaitUntil(
+                            static () => Log.Contains("first:initialize:begin"),
+                            cancellationToken: waitDeadline.Token);
+                    }
+                    catch (OperationCanceledException)
+                        when (waitDeadline.IsCancellationRequested)
+                    {
+                        waitFailure = new TimeoutException(
+                            "The first feature did not start within 10 seconds.");
+                    }
 
-                CollectionAssert.DoesNotContain(Log, "second:initialize:begin");
-                gate.TrySetResult();
-                await initialization;
+                    if (waitFailure == null)
+                    {
+                        CollectionAssert.DoesNotContain(
+                            Log,
+                            "second:initialize:begin");
+                        gate.TrySetResult();
+                        await initialization;
 
-                Assert.IsTrue(service.Report.IsSuccess);
-                Assert.Less(
-                    Log.IndexOf("first:initialize:end"),
-                    Log.IndexOf("second:initialize:begin"));
-                Assert.Less(Log.IndexOf("struct:init"), Log.IndexOf("class:init"));
+                        Assert.IsTrue(service.Report.IsSuccess);
+                        Assert.Less(
+                            Log.IndexOf("first:initialize:end"),
+                            Log.IndexOf("second:initialize:begin"));
+                        Assert.Less(
+                            Log.IndexOf("struct:init"),
+                            Log.IndexOf("class:init"));
 
-                service.Update();
-                Assert.Less(Log.IndexOf("struct:update"), Log.IndexOf("class:update"));
+                        service.Update();
+                        Assert.Less(
+                            Log.IndexOf("struct:update"),
+                            Log.IndexOf("class:update"));
+                    }
+                }
+                finally
+                {
+                    gate.TrySetResult();
+                    initializationCancellation.Cancel();
+                    cleanupFailure = await ObserveInitializationCompletion(
+                        initialization,
+                        nameof(SequentialModePreservesConfiguredFeatureOrder),
+                        initializationCancellation);
+                }
+
+                if (waitFailure != null)
+                {
+                    Assert.IsNull(
+                        cleanupFailure,
+                        $"Initialization cleanup failed: {cleanupFailure}");
+                    Assert.Fail(waitFailure.Message);
+                }
+
+                Assert.IsNull(
+                    cleanupFailure,
+                    $"Initialization cleanup failed: {cleanupFailure}");
             }
             finally
             {
-                service.Dispose();
-                Object.DestroyImmediate(second);
-                Object.DestroyImmediate(first);
+                if (initialization?.IsCompleted == false)
+                {
+                    AbortFixture(
+                        "Sequential feature initialization did not complete; leaving the service, world, and runtime assets owned by the editor process.");
+                }
+                else
+                {
+                    service.Dispose();
+                    Object.DestroyImmediate(second);
+                    Object.DestroyImmediate(first);
+                }
             }
 
             CollectionAssert.Contains(Log, "class:destroy");
@@ -97,30 +164,82 @@ namespace UniGame.StaticEcs.Unity.Tests
             var first = CreateAsset("parallel-first", addSystems: false);
             var second = CreateAsset("parallel-second", addSystems: false);
             var service = CreateService();
+            Task initialization = null;
+            using var initializationCancellation = new CancellationTokenSource();
             try
             {
-                var initialization = service.InitializeAsync(
+                initialization = service.InitializeAsync(
                     Entries(first, second),
                     _context,
-                    CancellationToken.None);
-                await UniTask.WaitUntil(
-                    static () =>
-                        Log.Contains("parallel-first:initialize:begin") &&
-                        Log.Contains("parallel-second:initialize:end"));
+                    initializationCancellation.Token)
+                    .AsTask();
+                Exception waitFailure = null;
+                Exception cleanupFailure = null;
+                try
+                {
+                    using var waitDeadline =
+                        new CancellationTokenSource(TimeSpan.FromSeconds(10));
+                    try
+                    {
+                        await UniTask.WaitUntil(
+                            static () =>
+                                Log.Contains("parallel-first:initialize:begin") &&
+                                Log.Contains("parallel-second:initialize:end"),
+                            cancellationToken: waitDeadline.Token);
+                    }
+                    catch (OperationCanceledException)
+                        when (waitDeadline.IsCancellationRequested)
+                    {
+                        waitFailure = new TimeoutException(
+                            "Parallel feature initialization did not overlap within 10 seconds.");
+                    }
 
-                CollectionAssert.DoesNotContain(
-                    Log,
-                    "parallel-first:initialize:end");
-                gate.TrySetResult();
-                await initialization;
+                    if (waitFailure == null)
+                    {
+                        CollectionAssert.DoesNotContain(
+                            Log,
+                            "parallel-first:initialize:end");
+                        gate.TrySetResult();
+                        await initialization;
 
-                Assert.IsTrue(service.Report.IsSuccess);
+                        Assert.IsTrue(service.Report.IsSuccess);
+                    }
+                }
+                finally
+                {
+                    gate.TrySetResult();
+                    initializationCancellation.Cancel();
+                    cleanupFailure = await ObserveInitializationCompletion(
+                        initialization,
+                        nameof(ParallelModeOverlapsFeatureInitializationByDefault),
+                        initializationCancellation);
+                }
+
+                if (waitFailure != null)
+                {
+                    Assert.IsNull(
+                        cleanupFailure,
+                        $"Initialization cleanup failed: {cleanupFailure}");
+                    Assert.Fail(waitFailure.Message);
+                }
+
+                Assert.IsNull(
+                    cleanupFailure,
+                    $"Initialization cleanup failed: {cleanupFailure}");
             }
             finally
             {
-                service.Dispose();
-                Object.DestroyImmediate(second);
-                Object.DestroyImmediate(first);
+                if (initialization?.IsCompleted == false)
+                {
+                    AbortFixture(
+                        "Parallel feature initialization did not complete; leaving the service, world, and runtime assets owned by the editor process.");
+                }
+                else
+                {
+                    service.Dispose();
+                    Object.DestroyImmediate(second);
+                    Object.DestroyImmediate(first);
+                }
             }
         }
 
@@ -151,7 +270,7 @@ namespace UniGame.StaticEcs.Unity.Tests
         }
 
         [Test]
-        public void UpdateDependentFeatureWithoutUpdateGroupRollsBack()
+        public async Task UpdateDependentFeatureWithoutUpdateGroupRollsBack()
         {
             var asset = CreateAsset("requires-update", addSystems: true);
             var systems = StaticEcsSystemsConfig.Default;
@@ -161,12 +280,22 @@ namespace UniGame.StaticEcs.Unity.Tests
                 systems);
             try
             {
-                Assert.CatchAsync<Exception>(async () =>
+                var initializationFailed = false;
+                try
+                {
                     await service.InitializeAsync(
                         Entries(asset),
                         _context,
-                        CancellationToken.None));
+                        CancellationToken.None);
+                }
+                catch (Exception)
+                {
+                    initializationFailed = true;
+                }
 
+                Assert.IsTrue(
+                    initializationFailed,
+                    "Initialization was expected to fail without an update group.");
                 Assert.AreEqual(
                     EcsStartupStage.InitializeFeatures,
                     service.Report.failedStage);
@@ -182,19 +311,29 @@ namespace UniGame.StaticEcs.Unity.Tests
         }
 
         [Test]
-        public void CancellationRollsBackWorldAndRuntimeAssetClone()
+        public async Task CancellationRollsBackWorldAndRuntimeAssetClone()
         {
             var asset = CreateAsset("cancelled", addSystems: false);
             var service = CreateService();
             using var cancellation = new CancellationTokenSource();
             cancellation.Cancel();
 
-            Assert.CatchAsync<OperationCanceledException>(async () =>
+            var initializationCancelled = false;
+            try
+            {
                 await service.InitializeAsync(
                     Entries(asset),
                     _context,
-                    cancellation.Token));
+                    cancellation.Token);
+            }
+            catch (OperationCanceledException)
+            {
+                initializationCancelled = true;
+            }
 
+            Assert.IsTrue(
+                initializationCancelled,
+                "Initialization was expected to be cancelled.");
             Assert.AreEqual(WorldStatus.NotCreated, World<TestWorld>.Status);
             Assert.AreEqual(0, RuntimeAssets.Count);
             service.Dispose();
@@ -202,18 +341,29 @@ namespace UniGame.StaticEcs.Unity.Tests
         }
 
         [Test]
-        public void InitializationFailureReportsFeatureStageAndRollsBack()
+        public async Task InitializationFailureReportsFeatureStageAndRollsBack()
         {
             var asset = CreateAsset("broken", addSystems: false);
             asset.failInitialization = true;
             var service = CreateService();
 
-            Assert.ThrowsAsync<InvalidOperationException>(async () =>
+            Exception exception = null;
+            try
+            {
                 await service.InitializeAsync(
                     Entries(asset),
                     _context,
-                    CancellationToken.None));
+                    CancellationToken.None);
+            }
+            catch (Exception caught)
+            {
+                exception = caught;
+            }
 
+            Assert.IsNotNull(
+                exception,
+                "Initialization was expected to fail for the broken feature.");
+            Assert.AreEqual(typeof(InvalidOperationException), exception.GetType());
             Assert.AreEqual(EcsStartupStage.InitializeFeatures, service.Report.failedStage);
             StringAssert.Contains("broken", service.Report.failedFeature);
             Assert.IsNotNull(LastWorldLifeTime);
@@ -342,31 +492,94 @@ namespace UniGame.StaticEcs.Unity.Tests
             config.featureInitializationMode =
                 StaticEcsFeatureInitializationMode.Sequential;
             var service = CreateService(config);
+            Task initialization = null;
             using var cancellation = new CancellationTokenSource();
             try
             {
-                var initialization = service.InitializeAsync(
+                initialization = service.InitializeAsync(
                     Entries(asset, nextAsset),
                     _context,
-                    cancellation.Token);
-                await UniTask.WaitUntil(static () => LastWorldLifeTime != null);
-                var worldLifeTime = LastWorldLifeTime;
+                    cancellation.Token)
+                    .AsTask();
+                Exception waitFailure = null;
+                Exception cleanupFailure = null;
+                try
+                {
+                    using var waitDeadline =
+                        new CancellationTokenSource(TimeSpan.FromSeconds(10));
+                    try
+                    {
+                        await UniTask.WaitUntil(
+                            static () => LastWorldLifeTime != null,
+                            cancellationToken: waitDeadline.Token);
+                    }
+                    catch (OperationCanceledException)
+                        when (waitDeadline.IsCancellationRequested)
+                    {
+                        waitFailure = new TimeoutException(
+                            "The world lifetime was not created within 10 seconds.");
+                    }
 
-                cancellation.Cancel();
-                Assert.CatchAsync<OperationCanceledException>(async () =>
-                    await initialization);
+                    if (waitFailure == null)
+                    {
+                        var worldLifeTime = LastWorldLifeTime;
+                        cancellation.Cancel();
+                        var initializationCancelled = false;
+                        try
+                        {
+                            await initialization;
+                        }
+                        catch (OperationCanceledException)
+                        {
+                            initializationCancelled = true;
+                        }
 
-                Assert.IsTrue(worldLifeTime.IsTerminated);
-                Assert.AreEqual(WorldStatus.NotCreated, World<TestWorld>.Status);
-                CollectionAssert.DoesNotContain(
-                    Log,
-                    "must-not-initialize:initialize:begin");
+                        Assert.IsTrue(
+                            initializationCancelled,
+                            "Initialization was expected to be cancelled.");
+                        Assert.IsTrue(worldLifeTime.IsTerminated);
+                        Assert.AreEqual(
+                            WorldStatus.NotCreated,
+                            World<TestWorld>.Status);
+                        CollectionAssert.DoesNotContain(
+                            Log,
+                            "must-not-initialize:initialize:begin");
+                    }
+                }
+                finally
+                {
+                    cancellation.Cancel();
+                    cleanupFailure = await ObserveInitializationCompletion(
+                        initialization,
+                        nameof(CancellationDuringFeatureInitializationTerminatesWorldLifeTime),
+                        allowCancellation: true);
+                }
+
+                if (waitFailure != null)
+                {
+                    Assert.IsNull(
+                        cleanupFailure,
+                        $"Initialization cleanup failed: {cleanupFailure}");
+                    Assert.Fail(waitFailure.Message);
+                }
+
+                Assert.IsNull(
+                    cleanupFailure,
+                    $"Initialization cleanup failed: {cleanupFailure}");
             }
             finally
             {
-                service.Dispose();
-                Object.DestroyImmediate(nextAsset);
-                Object.DestroyImmediate(asset);
+                if (initialization?.IsCompleted == false)
+                {
+                    AbortFixture(
+                        "Cancellation feature initialization did not complete; leaving the service, world, and runtime assets owned by the editor process.");
+                }
+                else
+                {
+                    service.Dispose();
+                    Object.DestroyImmediate(nextAsset);
+                    Object.DestroyImmediate(asset);
+                }
             }
         }
 
@@ -402,20 +615,53 @@ namespace UniGame.StaticEcs.Unity.Tests
             var asset = CreateAsset("cleanup-failure", addSystems: false);
             asset.addThrowingSystem = true;
             var service = CreateService();
-            await service.InitializeAsync(
-                Entries(asset),
-                _context,
-                CancellationToken.None);
-            LogAssert.Expect(
-                LogType.Error,
-                new Regex("Static ECS cleanup failed for Update systems"));
+            var serviceDisposed = false;
+            var assetDestroyed = false;
+            try
+            {
+                await service.InitializeAsync(
+                    Entries(asset),
+                    _context,
+                    CancellationToken.None);
+                LogAssert.Expect(
+                    LogType.Error,
+                    new Regex("Static ECS cleanup failed for Update systems"));
 
-            service.Dispose();
+                service.Dispose();
+                serviceDisposed = true;
 
-            Assert.AreEqual(WorldStatus.NotCreated, World<TestWorld>.Status);
-            Assert.AreEqual(0, RuntimeAssets.Count);
-            CollectionAssert.Contains(Log, "cleanup-failure:asset:destroy");
-            Object.DestroyImmediate(asset);
+                Assert.AreEqual(WorldStatus.NotCreated, World<TestWorld>.Status);
+                Assert.AreEqual(0, RuntimeAssets.Count);
+                CollectionAssert.Contains(Log, "cleanup-failure:asset:destroy");
+                Object.DestroyImmediate(asset);
+                assetDestroyed = true;
+            }
+            finally
+            {
+                try
+                {
+                    if (!serviceDisposed)
+                    {
+                        service.Dispose();
+                        serviceDisposed = true;
+                    }
+                }
+                finally
+                {
+                    try
+                    {
+                        if (!assetDestroyed)
+                        {
+                            Object.DestroyImmediate(asset);
+                            assetDestroyed = true;
+                        }
+                    }
+                    finally
+                    {
+                        ResetResidualUpdateSystems();
+                    }
+                }
+            }
         }
 
         [Test]
@@ -442,6 +688,94 @@ namespace UniGame.StaticEcs.Unity.Tests
             CollectionAssert.Contains(Log, "lifetime-cleanup-failure:asset:destroy");
             Assert.AreEqual(WorldStatus.NotCreated, World<TestWorld>.Status);
             Object.DestroyImmediate(asset);
+        }
+
+        private static async Task<Exception> ObserveInitializationCompletion(
+            Task initialization,
+            string testName,
+            CancellationTokenSource cancellation = null,
+            bool allowCancellation = false)
+        {
+            using var observationDeadline =
+                new CancellationTokenSource(TimeSpan.FromSeconds(10));
+            try
+            {
+                await UniTask.WaitUntil(
+                    () => initialization.IsCompleted,
+                    cancellationToken: observationDeadline.Token);
+            }
+            catch (OperationCanceledException)
+                when (!initialization.IsCompleted)
+            {
+                cancellation?.Cancel();
+                using var cancellationDeadline =
+                    new CancellationTokenSource(TimeSpan.FromSeconds(10));
+                try
+                {
+                    await UniTask.WaitUntil(
+                        () => initialization.IsCompleted,
+                        cancellationToken: cancellationDeadline.Token);
+                }
+                catch (OperationCanceledException)
+                    when (!initialization.IsCompleted)
+                {
+                    return new TimeoutException(
+                        $"Initialization cleanup for {testName} did not complete within 10 seconds.");
+                }
+            }
+
+            try
+            {
+                await initialization;
+            }
+            catch (Exception exception)
+            {
+                if (!allowCancellation || exception is not OperationCanceledException)
+                    return exception;
+            }
+
+            return null;
+        }
+
+        private static void AbortFixture(string reason)
+        {
+            _fixtureAborted = true;
+            _fixtureAbortReason = reason;
+            Debug.LogError(reason);
+            // A pending initialization still owns the service, world, and runtime assets.
+            // Keep them reachable in the interactive editor and skip fixture teardown.
+            if (Application.isBatchMode)
+                EditorApplication.Exit(1);
+        }
+
+        private static void ResetResidualUpdateSystems()
+        {
+            var systems = World<TestWorld>.Systems<StaticEcsUpdateSystems>.Handle;
+            if (!systems.IsValid || systems.Status() == SystemsStatus.NotCreated)
+                return;
+
+            if (World<TestWorld>.Status != WorldStatus.NotCreated)
+                throw new InvalidOperationException(
+                    "Cannot reset residual update systems while the test world is still alive.");
+
+            var temporaryWorldCreated = false;
+            try
+            {
+                World<TestWorld>.Create(WorldConfig.Default());
+                temporaryWorldCreated = true;
+                World<TestWorld>.Initialize();
+                World<TestWorld>.Systems<StaticEcsUpdateSystems>.Destroy();
+
+                if (World<TestWorld>.Systems<StaticEcsUpdateSystems>.Handle.IsValid)
+                    throw new InvalidOperationException(
+                        "Residual update systems remained registered after cleanup.");
+            }
+            finally
+            {
+                if (temporaryWorldCreated &&
+                    World<TestWorld>.Status != WorldStatus.NotCreated)
+                    World<TestWorld>.Destroy(withHooks: false);
+            }
         }
 
         private static LifecycleFeatureAsset CreateAsset(string id, bool addSystems)
@@ -566,8 +900,14 @@ namespace UniGame.StaticEcs.Unity.Tests
 
         private sealed class ThrowingDestroySystem : ISystem
         {
+            private bool _hasThrown;
+
             public void Destroy()
             {
+                if (_hasThrown)
+                    return;
+
+                _hasThrown = true;
                 throw new InvalidOperationException("Expected cleanup failure.");
             }
         }

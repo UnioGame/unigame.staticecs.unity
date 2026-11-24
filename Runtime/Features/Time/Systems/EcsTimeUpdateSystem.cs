@@ -3,7 +3,7 @@ using UnityTime = UnityEngine.Time;
 
 namespace UniGame.StaticEcs.Time
 {
-    /// <summary>Copies Unity update timing into the ECS time resource.</summary>
+    /// <summary>Advances ECS time by the configured update step or Unity game time.</summary>
     public class EcsTimeUpdateSystem<TWorld> : ISystem
         where TWorld : struct, IWorldType
     {
@@ -11,8 +11,12 @@ namespace UniGame.StaticEcs.Time
         public void Update()
         {
             ref var time = ref World<TWorld>.GetResource<EcsTime>();
-            var unscaledDelta = UnityTime.unscaledDeltaTime;
-            var scaledDelta = unscaledDelta * time.TimeScale;
+            var step = World<TWorld>.HasResource<EcsTimeConfig>()
+                ? World<TWorld>.GetResource<EcsTimeConfig>().UpdateStepSeconds
+                : null;
+            var unscaledDelta = step ?? UnityTime.unscaledDeltaTime;
+            var gameDelta = step ?? UnityTime.deltaTime;
+            var scaledDelta = gameDelta * time.TimeScale;
 
             time.DeltaTime = scaledDelta;
             time.UnscaledDeltaTime = unscaledDelta;

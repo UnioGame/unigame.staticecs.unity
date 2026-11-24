@@ -108,11 +108,23 @@ namespace UniGame.StaticEcs.Unity.Tests
                     CancellationToken.None);
                 Assert.AreSame(service, EcsServiceRegistry.Get<ReinitializationWorld>());
 
-                Assert.ThrowsAsync<ArgumentNullException>(async () =>
+                Exception exception = null;
+                try
+                {
                     await service.InitializeAsync(
                         Array.Empty<StaticEcsFeatureEntry>(),
                         null,
-                        CancellationToken.None));
+                        CancellationToken.None);
+                }
+                catch (Exception caught)
+                {
+                    exception = caught;
+                }
+
+                Assert.IsNotNull(
+                    exception,
+                    "Reinitialization was expected to reject a null context.");
+                Assert.AreEqual(typeof(ArgumentNullException), exception.GetType());
 
                 Assert.IsNull(EcsServiceRegistry.Get<ReinitializationWorld>());
                 Assert.AreEqual(
@@ -140,11 +152,22 @@ namespace UniGame.StaticEcs.Unity.Tests
                     CancellationToken.None);
                 cancellation.Cancel();
 
-                Assert.CatchAsync<OperationCanceledException>(async () =>
+                var initializationCancelled = false;
+                try
+                {
                     await service.InitializeAsync(
                         Array.Empty<StaticEcsFeatureEntry>(),
                         context,
-                        cancellation.Token));
+                        cancellation.Token);
+                }
+                catch (OperationCanceledException)
+                {
+                    initializationCancelled = true;
+                }
+
+                Assert.IsTrue(
+                    initializationCancelled,
+                    "Reinitialization was expected to be cancelled.");
 
                 Assert.IsNull(EcsServiceRegistry.Get<CancellationWorld>());
                 Assert.AreEqual(WorldStatus.NotCreated, World<CancellationWorld>.Status);

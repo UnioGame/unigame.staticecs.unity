@@ -1,7 +1,6 @@
 namespace UniGame.StaticEcs.Unity.Tests
 {
     using System;
-    using System.Reflection;
     using FFS.Libraries.StaticEcs;
     using NUnit.Framework;
     using UnityEditor;
@@ -115,74 +114,106 @@ namespace UniGame.StaticEcs.Unity.Tests
         }
 
         [Test]
-        public void EnabledContract_UsesSerializedFlag()
-        {
-            var converter = new LifecycleSerializableConverter();
-            SetEnabled(converter, false);
-
-            Assert.That(converter.IsEnabled, Is.False);
-        }
-
-        [Test]
         public void Provider_SkipsDisabledConverterForEveryLifecyclePhase()
         {
+            EcsAuthoringRegistry<TestSerializableConverterWorld>.Clear();
             World<TestSerializableConverterWorld>.Create(WorldConfig.Default());
             World<TestSerializableConverterWorld>.Initialize();
-            var host = new GameObject("disabled-provider");
-            var provider = host.AddComponent<TestEntityProvider>();
-            var converter = new LifecycleSerializableConverter();
-            SetEnabled(converter, false);
-            provider.serializableConverters.Add(converter);
+            EcsAuthoringRegistry<TestSerializableConverterWorld>.BeginWorld();
+            GameObject host = null;
             try
             {
+                host = new GameObject("disabled-provider");
+                var provider = host.AddComponent<TestEntityProvider>();
+                var converter = new LifecycleSerializableConverter();
+                converter.Enabled = false;
+                provider.serializableConverters.Add(converter);
+
                 Assert.That(provider.CreateEntity(), Is.True);
-                EcsAuthoringRegistry<TestSerializableConverterWorld>.Drain();
-                provider.ResolveLinks();
-                EcsAuthoringRegistry<TestSerializableConverterWorld>.Drain();
+                Assert.That(EcsAuthoringRegistry<TestSerializableConverterWorld>.Drain(), Is.EqualTo(1));
+                var gid = provider.EntityGid;
+                Assert.That(gid.TryUnpack<TestSerializableConverterWorld>(out _), Is.True);
                 UnityEngine.Object.DestroyImmediate(host);
                 host = null;
 
                 Assert.That(converter.ApplyCount, Is.Zero);
                 Assert.That(converter.ResolveCount, Is.Zero);
                 Assert.That(converter.DestroyCount, Is.Zero);
+                Assert.That(EcsAuthoringRegistry<TestSerializableConverterWorld>.Count, Is.Zero);
+                Assert.That(gid.TryUnpack<TestSerializableConverterWorld>(out _), Is.True,
+                    "The None destruction policy must leave the entity owned by its world.");
             }
             finally
             {
-                if (host != null)
-                    UnityEngine.Object.DestroyImmediate(host);
-
-                World<TestSerializableConverterWorld>.Destroy();
+                try
+                {
+                    if (host != null)
+                        UnityEngine.Object.DestroyImmediate(host);
+                }
+                finally
+                {
+                    try
+                    {
+                        EcsAuthoringRegistry<TestSerializableConverterWorld>.Clear();
+                    }
+                    finally
+                    {
+                        World<TestSerializableConverterWorld>.Destroy();
+                    }
+                }
             }
         }
 
         [Test]
         public void Provider_ForwardsEnabledConverterLifecycleExactlyOnce()
         {
+            EcsAuthoringRegistry<TestSerializableConverterWorld>.Clear();
             World<TestSerializableConverterWorld>.Create(WorldConfig.Default());
             World<TestSerializableConverterWorld>.Initialize();
-            var host = new GameObject("enabled-provider");
-            var provider = host.AddComponent<TestEntityProvider>();
-            var converter = new LifecycleSerializableConverter();
-            provider.serializableConverters.Add(converter);
+            EcsAuthoringRegistry<TestSerializableConverterWorld>.BeginWorld();
+            GameObject host = null;
             try
             {
+                host = new GameObject("enabled-provider");
+                var provider = host.AddComponent<TestEntityProvider>();
+                provider.onDestroyType = FFS.Libraries.StaticEcs.Unity.OnDestroyType.DestroyEntity;
+                var converter = new LifecycleSerializableConverter();
+                provider.serializableConverters.Add(converter);
+
                 Assert.That(provider.CreateEntity(), Is.True);
-                EcsAuthoringRegistry<TestSerializableConverterWorld>.Drain();
-                provider.ResolveLinks();
-                EcsAuthoringRegistry<TestSerializableConverterWorld>.Drain();
+                Assert.That(EcsAuthoringRegistry<TestSerializableConverterWorld>.Drain(), Is.EqualTo(1));
+                var gid = provider.EntityGid;
+                Assert.That(gid.TryUnpack<TestSerializableConverterWorld>(out _), Is.True);
+                Assert.That(converter.ApplyCount, Is.EqualTo(1));
+                Assert.That(converter.ResolveCount, Is.EqualTo(1));
+                Assert.That(converter.DestroyCount, Is.Zero);
                 UnityEngine.Object.DestroyImmediate(host);
                 host = null;
 
                 Assert.That(converter.ApplyCount, Is.EqualTo(1));
                 Assert.That(converter.ResolveCount, Is.EqualTo(1));
                 Assert.That(converter.DestroyCount, Is.EqualTo(1));
+                Assert.That(gid.TryUnpack<TestSerializableConverterWorld>(out _), Is.False);
+                Assert.That(EcsAuthoringRegistry<TestSerializableConverterWorld>.Count, Is.Zero);
             }
             finally
             {
-                if (host != null)
-                    UnityEngine.Object.DestroyImmediate(host);
-
-                World<TestSerializableConverterWorld>.Destroy();
+                try
+                {
+                    if (host != null)
+                        UnityEngine.Object.DestroyImmediate(host);
+                }
+                finally
+                {
+                    try
+                    {
+                        EcsAuthoringRegistry<TestSerializableConverterWorld>.Clear();
+                    }
+                    finally
+                    {
+                        World<TestSerializableConverterWorld>.Destroy();
+                    }
+                }
             }
         }
 
@@ -253,15 +284,6 @@ namespace UniGame.StaticEcs.Unity.Tests
                 World<TestSerializableConverterWorld>.Destroy();
             }
         }
-
-        private static void SetEnabled(
-            EcsSerializableConverter<TestSerializableConverterWorld> converter,
-            bool value)
-        {
-            typeof(EcsSerializableConverter<TestSerializableConverterWorld>)
-                .GetField("_isEnabled", BindingFlags.Instance | BindingFlags.NonPublic)
-                ?.SetValue(converter, value);
-        }
     }
 
     internal sealed class TestConverterPreset : EcsConverterPreset<TestSerializableConverterWorld>
@@ -272,6 +294,7 @@ namespace UniGame.StaticEcs.Unity.Tests
         }
     }
 
+    [ExecuteAlways]
     internal sealed class TestEntityProvider :
         EcsEntityProvider<TestSerializableConverterWorld>
     {
@@ -283,6 +306,8 @@ namespace UniGame.StaticEcs.Unity.Tests
             IEcsLinkResolver<TestSerializableConverterWorld>,
             IEcsConverterDestroyHandler<TestSerializableConverterWorld>
     {
+        public bool Enabled { get; set; } = true;
+        public override bool IsEnabled => Enabled;
         public int ApplyCount { get; private set; }
         public int ResolveCount { get; private set; }
         public int DestroyCount { get; private set; }

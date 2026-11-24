@@ -17,7 +17,8 @@ namespace UniGame.StaticEcs.Unity
         where TWorld : struct, IWorldType
     {
         private readonly LifeTime _lifeTime = new();
-        private readonly List<StaticEcsFeatureAsset<TWorld>> _runtimeFeatures = new();
+        private readonly List<RuntimeFeature> _runtimeFeatures = new();
+        private readonly List<UnityEngine.ScriptableObject> _runtimeResources = new();
         private readonly StaticEcsWorldConfig _worldConfig;
         private readonly StaticEcsSystemsConfig _systemsConfig;
         private LifeTime _worldLifeTime;
@@ -47,8 +48,19 @@ namespace UniGame.StaticEcs.Unity
         public bool IsInitialized => World<TWorld>.Status == WorldStatus.Initialized;
 
         /// <summary>Starts enabled feature pipelines in configured order using the selected initialization mode.</summary>
-        public async UniTask InitializeAsync(
+        public UniTask InitializeAsync(
             IReadOnlyList<StaticEcsFeatureEntry> entries,
+            IContext context,
+            CancellationToken cancellationToken)
+        {
+            var composition = new StaticEcsComposition<TWorld>();
+            composition.AddEntries(entries);
+            return InitializeAsync(composition, context, cancellationToken);
+        }
+
+        /// <summary>Starts declared feature pipelines in composition order using the selected initialization mode.</summary>
+        public async UniTask InitializeAsync(
+            StaticEcsComposition<TWorld> composition,
             IContext context,
             CancellationToken cancellationToken)
         {
@@ -66,7 +78,7 @@ namespace UniGame.StaticEcs.Unity
                         nameof(context),
                         "Static ECS initialization requires an application context.");
 
-                CreateRuntimeFeatures(entries, assemblies);
+                CreateRuntimeFeatures(composition, assemblies);
                 cancellationToken.ThrowIfCancellationRequested();
 
                 Report.stage = EcsStartupStage.CreateWorld;
@@ -85,6 +97,8 @@ namespace UniGame.StaticEcs.Unity
                 World<TWorld>.SetResource(contextResource);
                 World<TWorld>.SetResource(worldConfig);
                 World<TWorld>.SetResource(systemsConfig);
+
+                PublishDeclaredResources(composition);
 
                 Report.bootstrapResourcesInstalled = true;
 
@@ -170,7 +184,7 @@ namespace UniGame.StaticEcs.Unity
             for (var i = 0; i < _runtimeFeatures.Count; i++)
             {
                 cancellationToken.ThrowIfCancellationRequested();
-                var feature = _runtimeFeatures[i];
+                var feature = _runtimeFeatures[i].Feature;
                 Report.currentFeature = feature.FeatureName;
                 await feature.InitializeAsync(_worldLifeTime);
             }
@@ -193,7 +207,7 @@ namespace UniGame.StaticEcs.Unity
             {
                 cancellationToken.ThrowIfCancellationRequested();
                 tasks[i] = InitializeFeatureAsync(
-                    _runtimeFeatures[i],
+                    _runtimeFeatures[i].Feature,
                     i,
                     failures);
             }
@@ -221,7 +235,7 @@ namespace UniGame.StaticEcs.Unity
         }
 
         private async UniTask InitializeFeatureAsync(
-            StaticEcsFeatureAsset<TWorld> feature,
+            IStaticEcsFeature<TWorld> feature,
             int index,
             string[] failures)
         {
@@ -303,51 +317,56 @@ namespace UniGame.StaticEcs.Unity
         }
 
         private void CreateRuntimeFeatures(
-            IReadOnlyList<StaticEcsFeatureEntry> entries,
+            StaticEcsComposition<TWorld> composition,
             HashSet<Assembly> assemblies)
         {
-            if (entries == null)
+            if (composition == null)
                 return;
 
-            var assets = new HashSet<StaticEcsFeatureAssetBase>();
-            for (var i = 0; i < entries.Count; i++)
+            var declarations = composition.Declarations;
+            for (var i = 0; i < declarations.Count; i++)
             {
-                var entry = entries[i];
-                if (entry == null || !entry.IsEnabled || entry.asset == null)
-                    continue;
+                var declaration = declarations[i];
+                Report.currentFeature = declaration.Name;
 
-                var asset = entry.asset;
-                if (!assets.Add(asset))
-                    throw new InvalidOperationException($"Feature asset `{asset.name}` is listed more than once.");
+                var asset = declaration.Asset;
+                var featureType = declaration.FeatureType;
+                var runtimeFeature = asset == null
+                    ? new RuntimeFeature(declaration.CreateFeature(), null)
+                    : CreateRuntimeAssetFeature(asset);
 
-                if (asset.WorldType != typeof(TWorld))
-                    throw new InvalidOperationException(
-                        $"Feature asset `{asset.name}` targets `{asset.WorldType.Name}`, expected `{typeof(TWorld).Name}`.");
-
-                Report.currentFeature = asset.FeatureName;
-                var runtimeAsset = asset.CreateRuntimeAsset();
-                if (runtimeAsset is not StaticEcsFeatureAsset<TWorld> runtime)
-                {
-                    StaticEcsFeatureAssetBase.DestroyRuntimeAsset(runtimeAsset);
-                    throw new InvalidOperationException(
-                        $"Feature asset `{asset.name}` did not clone as " +
-                        $"{nameof(StaticEcsFeatureAsset<TWorld>)}.");
-                }
-
-                _runtimeFeatures.Add(runtime);
-                AddFeatureAssemblies(runtime, assemblies);
+                _runtimeFeatures.Add(runtimeFeature);
+                AddFeatureAssemblies(
+                    runtimeFeature.AssetClone?.GetType(),
+                    featureType,
+                    assemblies);
             }
 
             Report.featureCount = _runtimeFeatures.Count;
         }
 
+        private static RuntimeFeature CreateRuntimeAssetFeature(StaticEcsFeatureAssetBase asset)
+        {
+            var runtimeAsset = asset.CreateRuntimeAsset();
+            if (runtimeAsset is not StaticEcsFeatureAsset<TWorld> runtime)
+            {
+                StaticEcsFeatureAssetBase.DestroyRuntimeAsset(runtimeAsset);
+                throw new InvalidOperationException(
+                    $"Feature asset `{asset.name}` did not clone as " +
+                    $"{nameof(StaticEcsFeatureAsset<TWorld>)}.");
+            }
+
+            return new RuntimeFeature(runtime, runtime);
+        }
+
         private static void AddFeatureAssemblies(
-            StaticEcsFeatureAsset<TWorld> runtime,
+            Type assetType,
+            Type featureType,
             HashSet<Assembly> assemblies)
         {
-            assemblies.Add(runtime.GetType().Assembly);
+            if (assetType != null)
+                assemblies.Add(assetType.Assembly);
 
-            var featureType = runtime.ProgrammaticFeatureType;
             while (featureType != null &&
                    featureType != typeof(StaticEcsFeature<TWorld>) &&
                    typeof(IStaticEcsFeature<TWorld>).IsAssignableFrom(featureType))
@@ -421,7 +440,7 @@ namespace UniGame.StaticEcs.Unity
         {
             for (var featureIndex = 0; featureIndex < _runtimeFeatures.Count; featureIndex++)
             {
-                var feature = _runtimeFeatures[featureIndex];
+                var feature = _runtimeFeatures[featureIndex].Feature;
                 if (feature is not IStaticEcsFeatureTypeRegistrar<TWorld> registrar)
                     continue;
 
@@ -492,12 +511,12 @@ namespace UniGame.StaticEcs.Unity
                 $"authoring registry stop `{typeof(TWorld).Name}`",
                 reason,
                 static () => EcsAuthoringRegistry<TWorld>.StopWorld());
+            TerminateWorldLifeTime(reason);
             DestroySystems(reason);
             TryCleanup(
                 $"authoring registry teardown `{typeof(TWorld).Name}`",
                 reason,
                 static () => EcsAuthoringRegistry<TWorld>.EndWorld());
-            TerminateWorldLifeTime(reason);
             DestroyWorldIfNeeded(reason);
             DestroyRuntimeFeatures(reason);
         }
@@ -553,14 +572,54 @@ namespace UniGame.StaticEcs.Unity
         {
             for (var i = _runtimeFeatures.Count - 1; i >= 0; i--)
             {
-                var runtimeFeature = _runtimeFeatures[i];
+                var assetClone = _runtimeFeatures[i].AssetClone;
+                if (assetClone == null)
+                    continue;
+
                 TryCleanup(
-                    $"runtime feature `{runtimeFeature.FeatureName}`",
+                    $"runtime feature `{assetClone.FeatureName}`",
                     reason,
-                    () => StaticEcsFeatureAssetBase.DestroyRuntimeAsset(runtimeFeature));
+                    () => StaticEcsFeatureAssetBase.DestroyRuntimeAsset(assetClone));
             }
 
             _runtimeFeatures.Clear();
+
+            for (var i = _runtimeResources.Count - 1; i >= 0; i--)
+            {
+                var resource = _runtimeResources[i];
+                TryCleanup(
+                    $"runtime resource `{resource.name}`",
+                    reason,
+                    () => DestroyRuntimeResource(resource));
+            }
+
+            _runtimeResources.Clear();
+        }
+
+        private static void DestroyRuntimeResource(UnityEngine.ScriptableObject resource)
+        {
+            if (resource == null)
+                return;
+
+            if (UnityEngine.Application.isPlaying)
+            {
+                UnityEngine.Object.Destroy(resource);
+                return;
+            }
+
+            UnityEngine.Object.DestroyImmediate(resource);
+        }
+
+        private void PublishDeclaredResources(StaticEcsComposition<TWorld> composition)
+        {
+            var declarations = composition.Resources;
+            for (var i = 0; i < declarations.Count; i++)
+            {
+                var declaration = declarations[i];
+                var copy = declaration.CreateCopy(declaration.Asset);
+                _runtimeResources.Add(copy);
+                declaration.Publish(copy);
+            }
         }
 
         private void ResetReport()
@@ -622,6 +681,22 @@ namespace UniGame.StaticEcs.Unity
                 UnityEngine.Debug.LogError(
                     $"Static ECS cleanup failed for {operation} during {reason}: {exception}");
             }
+        }
+
+        private readonly struct RuntimeFeature
+        {
+            public RuntimeFeature(
+                IStaticEcsFeature<TWorld> feature,
+                StaticEcsFeatureAssetBase assetClone)
+            {
+                Feature = feature;
+                AssetClone = assetClone;
+            }
+
+            public IStaticEcsFeature<TWorld> Feature { get; }
+
+            /// <summary>Gets the service-owned asset clone, or null for a code feature.</summary>
+            public StaticEcsFeatureAssetBase AssetClone { get; }
         }
 
     }

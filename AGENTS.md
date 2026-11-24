@@ -10,11 +10,21 @@ Use the repo-local `$build-static-ecs-features` skill for feature assets, conver
 
 ## Feature composition
 
-- ECS service sources store only ordered `StaticEcsFeatureEntry` ScriptableObject references. Do not add module APIs or inline `SerializeReference` features.
-- A feature asset is cloned by the service and is the runtime initialization boundary.
-  Use `StaticEcsFeatureAsset<TWorld, TFeature>` for a serialized programmatic
-  feature. Derive from `StaticEcsFeatureAsset<TWorld>` directly only when the
-  ScriptableObject itself owns the implementation.
+- A world is composed from ordered `StaticEcsComposition<TWorld>` declarations:
+  code features through `Add<TFeature>()` and feature assets through `Add(asset)` or
+  `AddEntries`. ECS service source assets store ordered `StaticEcsFeatureEntry`
+  references. Do not add module APIs or inline `SerializeReference` features.
+- A fresh code feature instance or a fresh asset clone is the runtime initialization
+  boundary for every initialization. Code features are parameterless. A programmatic
+  feature type is declared once per world; a duplicate throws from `Add`.
+- Feature assets and code declarations are equally supported ways to compose a world
+  and may be mixed in one composition. Neither is legacy; choose per feature.
+- Data that several worlds must keep identical (for example ability and item configuration)
+  belongs in one ScriptableObject `IResource` published with `composition.AddResource(asset)`,
+  not in a copy per world-bound feature asset. Features read it with the resource API.
+- Use `StaticEcsFeatureAsset<TWorld, TFeature>` for a serialized programmatic feature.
+  Derive from `StaticEcsFeatureAsset<TWorld>` directly only when the ScriptableObject
+  itself owns the implementation.
 - Programmatic features read asynchronous dependencies directly through
   `Resource<T>.GetAsync(lifeTime)`. Do not add dependency descriptors, installers,
   validation contexts, or manual `new Feature().InitializeAsync(...)` adapters.
@@ -27,11 +37,10 @@ Use the repo-local `$build-static-ecs-features` skill for feature assets, conver
 - Publish bootstrap resources, auto-register active feature assemblies, run closed-generic
   assembly registrars, then initialize features using the configured mode.
 - On failure, destroy created groups, the world, and runtime asset clones. Normal disposal uses the same ownership order.
-- Scan assemblies only for enabled runtime-cloned feature assets. For a generic
-  adapter, include the asset assembly and the assemblies of `TFeature` and its
-  programmatic feature base classes, stopping before the shared framework base.
-  This keeps cross-asmdef feature variants self-contained without scanning disabled
-  assets. `RegisterAll` owns ordinary concrete markers; assembly registrars own
+- Scan assemblies only for declared features. Include the asset assembly of a cloned
+  asset and the assemblies of the programmatic feature type and its base classes,
+  stopping before the shared framework base. This keeps cross-asmdef feature variants
+  self-contained without scanning disabled assets. `RegisterAll` owns ordinary concrete markers; assembly registrars own
   required closed generic constructions. Resources never require type registration.
 - `EcsContextResource` is non-owning. Access it through `StaticEcsContext.Get()` only at initialization boundaries; realtime code consumes typed ECS Resources.
 - `EcsWorldLifeTimeResource` is a non-owning view of the lifetime owned by the
@@ -57,9 +66,5 @@ Use the repo-local `$build-static-ecs-features` skill for feature assets, conver
 
 ## Documentation
 
-- Public docs are English and use Capabilities / Usage / Configuration. Keep short
-  XML summaries on public types; document public members only for non-obvious
-  ownership, lifetime, units, zero/null meaning, ordering, failure, or wire
-  semantics. Explain why and constraints, not signatures or the next line.
-- Remove stale TODOs and commented-out code. Review enforces the policy; do not add
-  a dedicated analyzer.
+- Public docs are English and use Capabilities / Usage / Configuration. XML summaries
+  and comments follow the repository-wide rules.

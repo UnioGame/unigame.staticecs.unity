@@ -7,7 +7,7 @@ namespace UniGame.StaticEcs.Unity
     {
         /// <summary>Startup has not begun.</summary>
         None,
-        /// <summary>Enabled feature assets are being cloned.</summary>
+        /// <summary>Declared features are being created and enabled feature assets cloned.</summary>
         CreateFeatures,
         /// <summary>The Static ECS world is being created.</summary>
         CreateWorld,
